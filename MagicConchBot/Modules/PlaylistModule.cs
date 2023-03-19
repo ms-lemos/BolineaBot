@@ -20,23 +20,23 @@ namespace MagicConchBot.Modules
             await RespondAsync("Why");
         }
 
-        [SlashCommand("save", "Save a song to a playlist")]
-        public async Task SaveToPlaylist(string name = Playlist.DefaultName)
-        {
-            if (Context.MusicService.CurrentSong.HasNoValue)
-            {
-                return;
-            }
+        //[SlashCommand("save", "Save a song to a playlist")]
+        //public async Task SaveToPlaylist(string name = Playlist.DefaultName)
+        //{
+        //    if (!Context.MusicService.CurrentSong.HasValue)
+        //    {
+        //        return;
+        //    }
 
-            var playlist = Context.Settings.GetPlaylistOrCreate(name);
+        //    var playlist = Context.Settings.GetPlaylistOrCreate(name);
 
-            await Context.MusicService.CurrentSong.Execute(async song => {
-                playlist.Songs.Add(song.Identifier);
-                Context.SaveSettings();
+        //    await Context.MusicService.CurrentSong.Execute(async song => {
+        //        playlist.Songs.Add(song.Identifier);
+        //        Context.SaveSettings();
 
-                await RespondAsync($"Added {song.Name} to playlist {playlist.Name}");
-            });
-        }
+        //        await RespondAsync($"Added {song.Name} to playlist {playlist.Name}");
+        //    });
+        //}
 
         [Group("playlist", "Playlist commands")]
         public class PlaylistSubModule : InteractionModuleBase<ConchInteractionCommandContext>

@@ -57,12 +57,12 @@ namespace MagicConchBot.Services
 
         public async Task<Song> ResolveStreamUri(Song song)
         {
-            var results = youtubeClient.Search.GetResultsAsync(song.StreamUri);
+            var results = youtubeClient.Search.GetResultsAsync(song.DefaultStreamUri);
             var res = await results.FirstAsync();
             var manifest = await youtubeClient.Videos.Streams.GetManifestAsync(VideoId.Parse(res.Url));
             var streamUri = manifest.GetAudioStreams().OrderByDescending(a => a.Bitrate).FirstOrDefault().Url;
 
-            return song with { Identifier = res.Url, StreamUri = streamUri };
+            return song with { Identifier = res.Url, DefaultStreamUri = streamUri };
         }
     }
 }

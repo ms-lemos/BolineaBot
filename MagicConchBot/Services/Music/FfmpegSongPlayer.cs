@@ -1,179 +1,145 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using Discord;
+﻿using Discord;
 using Discord.Audio;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Common.Types;
 using MagicConchBot.Helpers;
 using NLog;
 using Stateless;
+using System.Diagnostics;
+using System.IO;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using CSharpFunctionalExtensions;
+using SharpCompress.Common;
+using LiteDB;
+using YoutubeExplode.Videos.Streams;
 
 namespace MagicConchBot.Services.Music
 {
-    public enum PlayerState
-    {
-        Stopped = 0,
-        Paused,
-        Playing
-    }
-
-    public enum PlayerAction
-    {
-        ChangeVolume,
-        Play,
-        Pause,
-        Stop,
-        SongFinished
-    }
-
     public class FfmpegSongPlayer : ISongPlayer
     {
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
         private const float MaxVolume = 1f;
         private const float MinVolume = 0f;
         private const int Milliseconds = 20;
-        private const int FrameSize = 3840;
+        private int FrameSize { get; set; } = 3840;
         private const int MaxRetryCount = 50;
-        private int bitrate;
         private Song currentSong;
         private IAudioClient audioClient;
         private IMessageChannel messageChannel;
         private CancellationTokenSource tokenSource;
-        private float volume = 0.5f;
+        private Task _currentPlaying;
 
-        private readonly StateMachine<PlayerState, PlayerAction> songPlayer;
-        private readonly StateMachine<PlayerState, PlayerAction>.TriggerWithParameters<float> changeVolume;
-        private readonly StateMachine<PlayerState, PlayerAction>.TriggerWithParameters<IAudioClient> playTrigger;
+        private int Bitrate { get; set; }
+        private float Volume { get; set; } = 1f;
 
-        public event AsyncEventHandler<SongCompletedArgs> OnSongCompleted;
-        private Task HandleSongCompleted() => OnSongCompleted?.Invoke(this, new(audioClient, messageChannel, currentSong, bitrate));
+        public event AsyncEventHandler<SongArgs> OnSongCompleted;
+        public event AsyncEventHandler<SongErrorArgs> OnSongError;
 
-        public FfmpegSongPlayer()
+        private Task HandleSongCompleted() => OnSongCompleted?.Invoke(this, new(audioClient, messageChannel, currentSong, Bitrate));
+        private Task HandleSongError(Exception ex) => OnSongError?.Invoke(this, new(ex, audioClient, messageChannel, currentSong, Bitrate));
+
+        public async void PlaySong(IAudioClient client, IMessageChannel channel, Song song, int bitrate)
         {
-            songPlayer = new StateMachine<PlayerState, PlayerAction>(PlayerState.Stopped);
-
-            playTrigger = songPlayer.SetTriggerParameters<IAudioClient>(PlayerAction.Play);
-            changeVolume = songPlayer.SetTriggerParameters<float>(PlayerAction.ChangeVolume);
-
-            songPlayer.Configure(PlayerState.Stopped)
-                .Ignore(PlayerAction.Stop)
-                .Ignore(PlayerAction.Pause)
-                .OnEntry(CancelToken)
-                .OnEntryFrom(PlayerAction.Stop, OnStop)
-                .OnEntryFromAsync(PlayerAction.SongFinished, HandleSongCompleted)
-                .InternalTransition(changeVolume, (volume, _) => this.volume = volume)
-                .Permit(PlayerAction.Play, PlayerState.Playing)
-                .PermitReentry(PlayerAction.SongFinished);
-
-            songPlayer.Configure(PlayerState.Paused)
-                .Ignore(PlayerAction.Pause)
-                .Ignore(PlayerAction.SongFinished)
-                .OnEntry(CancelToken)
-                .OnEntryAsync(SaveTimeAndDisconnect)
-                .InternalTransition(changeVolume, (volume, _) => this.volume = volume)
-                .Permit(PlayerAction.Play, PlayerState.Playing)
-                .Permit(PlayerAction.Stop, PlayerState.Stopped);
-
-            songPlayer.Configure(PlayerState.Playing)
-                .Ignore(PlayerAction.Play)
-                .InternalTransition(changeVolume, (volume, _) => this.volume = volume)
-                .Permit(PlayerAction.SongFinished, PlayerState.Stopped)
-                .Permit(PlayerAction.Stop, PlayerState.Stopped)
-                .Permit(PlayerAction.Pause, PlayerState.Paused)
-                .OnEntryFrom(playTrigger, PlaySongLongRunning);
-
-            songPlayer.OnTransitioned((transition) => Log.Info(transition.Trigger + ": " + transition.Source + " -> " + transition.Destination));
-        }
-
-        public void PlaySong(IAudioClient client, IMessageChannel channel, Song song, int bitrate)
-        {
-            this.bitrate = bitrate;
+            Bitrate = bitrate;
             currentSong = song;
             messageChannel = channel;
             audioClient = client;
             tokenSource = new CancellationTokenSource();
 
-            songPlayer.Fire(playTrigger, client);
+            try
+            {
+                await PlaySong();
+                await HandleSongCompleted();
+            }
+            catch (OperationCanceledException ex)
+            {
+                Log.Debug($"Player task cancelled: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                await HandleSongError(ex);
+            }
         }
 
-        public async Task Stop()
-        {
-            await songPlayer.FireAsync(PlayerAction.Stop);
-        }
-
-        public async Task Pause()
-        {
-            await songPlayer.FireAsync(PlayerAction.Pause);
-        }
-
-        private void OnStop()
+        public Task Stop()
         {
             currentSong.Time.StartTime = TimeSpan.Zero;
-        }
 
-        private void CancelToken()
-        {
             tokenSource.Cancel();
+
+            return Task.CompletedTask;
         }
 
-        private async Task SaveTimeAndDisconnect()
+        public Task Pause()
         {
             currentSong.Time.StartTime = currentSong.Time.CurrentTime.GetValueOrThrow("No value");
-            if (audioClient.ConnectionState == ConnectionState.Connected)
-                await audioClient.StopAsync();
+
+            tokenSource.Cancel();
+
+            return Task.CompletedTask;
         }
 
         public void SetVolume(float volume)
         {
-            songPlayer.Fire(changeVolume, Math.Clamp(volume, MinVolume, MaxVolume));
+            Volume = Math.Clamp(volume, MinVolume, MaxVolume);
         }
 
         public float GetVolume()
         {
-            return volume;
+            return Volume;
         }
 
         public bool IsPlaying()
         {
-            return songPlayer.IsInState(PlayerState.Playing);
+            return !_currentPlaying?.IsCompleted ?? false;
         }
 
-        private void PlaySongLongRunning(IAudioClient audioClient)
+        private async Task PlaySong()
         {
-            Task.Factory.StartNew(() => PlaySong(audioClient), tokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
+            using var process = StartFfmpeg(currentSong);
+            using var inStream = process.StandardOutput.BaseStream;
 
-        private async Task PlaySong(IAudioClient audioClient)
-        {
-            try
+            if (audioClient.ConnectionState != ConnectionState.Connected)
             {
-                using var process = StartFfmpeg(currentSong);
-                using var inStream = process.StandardOutput.BaseStream;
-                using var outStream = audioClient.CreatePCMStream(AudioApplication.Music, bitrate);
+                throw new Exception("panic disconnected"); // todo check this
+            }
 
-                tokenSource.Token.Register(() => {
-                    try
+
+            tokenSource.Token.Register(() =>
+            {
+                try
+                {
+                    if (!process.HasExited)
                     {
-                        if (!process.HasExited)
-                        {
-                            process.CloseMainWindow();
-                        }
-                    } catch { }
-                });
+                        process.CloseMainWindow();
+                    }
+                }
+                catch (Exception ex) { Log.Error(ex); }
+            });
 
-                await StreamAudio(currentSong, inStream, outStream, tokenSource);
-            } 
-            finally
+            if (!currentSong.IsResolved)
             {
-                await songPlayer.FireAsync(PlayerAction.SongFinished);
+                Log.Info($"Skippped unresolved song: {currentSong.Name}");
+                return;
+            }
+
+            if (currentSong.OpusUri == null)
+            {
+                FrameSize = 4096;
+                using AudioOutStream outStream = audioClient.CreatePCMStream(AudioApplication.Music, Bitrate);
+                await StreamAudio(currentSong, inStream, outStream);
+            }
+            else
+            {
+                FrameSize = 1500;
+                using AudioOutStream outStream = audioClient.CreateOpusStream();
+                await StreamAudio(currentSong, inStream, outStream);
             }
         }
 
-        private async Task StreamAudio(Song song, Stream inStream, AudioOutStream outStream, CancellationTokenSource tokenSource)
+        private async Task StreamAudio(Song song, Stream inStream, AudioOutStream outStream)
         {
             var buffer = new byte[FrameSize];
             var retryCount = 0;
@@ -181,10 +147,11 @@ namespace MagicConchBot.Services.Music
             Log.Debug("Playing song.");
             song.Time.CurrentTime = song.Time.StartTime.GetValueOrDefault(TimeSpan.Zero);
 
-            while (!tokenSource.IsCancellationRequested)
+            while (true)
             {
+                tokenSource.Token.ThrowIfCancellationRequested();
+
                 var byteCount = await inStream.ReadAsync(buffer.AsMemory(0, buffer.Length), tokenSource.Token);
-                
 
                 if (byteCount == 0)
                 {
@@ -207,25 +174,31 @@ namespace MagicConchBot.Services.Music
                     retryCount = 0;
                 }
 
-                buffer = AudioHelper.ChangeVol(buffer, volume);
+                //buffer = AudioHelper.ChangeVol(buffer, Volume);
 
                 if (outStream.CanWrite)
                 {
                     await outStream.WriteAsync(buffer.AsMemory(0, byteCount), tokenSource.Token);
+                    //await outStream.FlushAsync(tokenSource.Token);
                 }
 
                 song.Time.CurrentTime = song.Time.CurrentTime.Map(current => current + CalculateCurrentTime(byteCount));
 
             }
 
-            await outStream.WriteAsync(await File.ReadAllBytesAsync("goodbye.pcm"));
             await outStream.FlushAsync(tokenSource.Token);
         }
 
-        private static Process StartFfmpeg(Song song)
+        private Process StartFfmpeg(Song song)
         {
             var seek = song.Time.StartTime.Map(totalSeconds => $"-ss {totalSeconds}").GetValueOrDefault(string.Empty);
-            var arguments = $"-hide_banner -loglevel panic -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.StreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:1";
+
+            //var arguments = $"-hide_banner -loglevel panic -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.StreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:1";
+            var stdArguments = $"-hide_banner -loglevel panic -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.DefaultStreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:1";
+            var opusArguments = $"-hide_banner -loglevel warning -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.OpusUri}\" {seek} -c:a libopus -b:a {Bitrate} -f opus pipe:1";
+            // -preset slow -crf 18 -c:a copy -pix_fmt yuv420p
+
+            var arguments = song.OpusUri == null ? stdArguments : opusArguments;
 
             Log.Debug(arguments);
 
@@ -233,11 +206,13 @@ namespace MagicConchBot.Services.Music
             {
                 FileName = "ffmpeg",
                 Arguments = arguments,
+
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
-                UseShellExecute = false,
+                UseShellExecute = false
             };
+
             var process = new Process()
             {
                 StartInfo = startInfo
@@ -245,7 +220,7 @@ namespace MagicConchBot.Services.Music
 
             process.ErrorDataReceived += (sender, data) =>
             {
-                Log.Error(data.Data);
+                if (!string.IsNullOrWhiteSpace(data?.Data)) { Log.Error("Ffmpeg error: " + data.Data); }
             };
 
             try
@@ -271,7 +246,7 @@ namespace MagicConchBot.Services.Music
             return process;
         }
 
-        private static TimeSpan CalculateCurrentTime(int currentBytes)
+        private TimeSpan CalculateCurrentTime(int currentBytes)
         {
             return TimeSpan.FromSeconds(currentBytes /
                                         (1000d * FrameSize /

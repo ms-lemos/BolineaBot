@@ -52,9 +52,15 @@ namespace MagicConchBot.Modules
         public async Task RemoveAsync(int songNumber)
         {
             var song = await Context.MusicService.RemoveSong(songNumber);
-            await song
-                .Map(async song => await RespondAsync("Successfully removed song from queue:", embed: song.GetEmbed($"{song.Name}")))
-                .ExecuteNoValue(async () => await RespondAsync($"No song at position: {songNumber}"));
+
+            if(song == null)
+            {
+                await RespondAsync($"No song at position: {songNumber}");
+            }
+            else
+            {
+                await RespondAsync("Successfully removed song from queue:", embed: song.Value.GetEmbed($"{song.Value.Name}"));
+            }
         }
 
         [SlashCommand("mode", "Change the queue mode to queue (remove after playing) or playlist (repeat).")]

@@ -38,12 +38,12 @@ namespace MagicConchBot.Services
             if (song.Time.Length == TimeSpan.Zero)
             {
                 // too slow, must update later with extra info instead most likely...
-                if (song.StreamUri == null)
+                if (song.DefaultStreamUri == null)
                 {
                     song = await resolver.ResolveStreamUri(song);
                 }
 
-                song.Time.Length = await GetStreamLength(song.StreamUri);
+                song.Time.Length = await GetStreamLength(song.DefaultStreamUri);
             }
 
             return song;

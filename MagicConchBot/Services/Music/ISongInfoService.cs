@@ -24,7 +24,7 @@ namespace MagicConchBot.Common.Interfaces
             var youtubeDlInfo = await DefaultSongInfo.GetUrlFromYoutubeDlAsync(song.Identifier);
             return youtubeDlInfo
                 .Map(urls => urls.First())
-                .Map(url => song with { StreamUri = url})
+                .Map(url => song with { DefaultStreamUri = url})
                 .GetValueOrThrow($"Could not resolve song uri from youtube-dl for {song}");
         }
     }

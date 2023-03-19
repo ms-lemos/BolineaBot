@@ -83,11 +83,20 @@ namespace MagicConchBot.Services
 
         public async Task<Song> ResolveStreamUri(Song song)
         {
-            var manifest = await _youtubeClient.Videos.Streams.GetManifestAsync(VideoId.Parse(song.Identifier));
-            var streams = manifest.GetAudioOnlyStreams();
-            var streamInfo = streams.OrderByDescending(s => s.Bitrate).FirstOrDefault();
+            try
+            {
+                var manifest = await _youtubeClient.Videos.Streams.GetManifestAsync(VideoId.Parse(song.Identifier));
+                var streams = manifest.GetAudioOnlyStreams().OrderByDescending(s => s.Bitrate);
+                var defaultStreamInfo = streams.FirstOrDefault();
+                //var opusStream = streams.FirstOrDefault(s => s.AudioCodec == "opus");
 
-            return song with { StreamUri = streamInfo.Url };
+                return song with { DefaultStreamUri = defaultStreamInfo.Url/*, OpusUri = opusStream.Url */};
+            }
+            catch(Exception ex)
+            {
+                Log.Error($"Failed to fetch youtube info: {ex.Message}");
+                return song;
+            }
         }
     }
 }

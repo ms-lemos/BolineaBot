@@ -18,9 +18,10 @@ namespace MagicConchBot.Common.Types
         }
     }
 
-    public readonly record struct Song(string Name, SongTime Time, string ThumbnailUrl = "", string OriginalUrl = "", string Identifier = "", MusicType MusicType = MusicType.Other, string StreamUri = null)
+    public readonly record struct Song(string Name, SongTime Time, string ThumbnailUrl = "", string OriginalUrl = "", string Identifier = "", MusicType MusicType = MusicType.Other, string DefaultStreamUri = null, string OpusUri = null)
     {
-        public Song(string url) : this(url, new SongTime(), OriginalUrl: url, StreamUri: url) { }
+        public bool IsResolved => DefaultStreamUri != null;
+        public Song(string url) : this(url, new SongTime(), OriginalUrl: url, DefaultStreamUri: url) { }
     }
 
     public static class SongExtensions {
@@ -39,7 +40,7 @@ namespace MagicConchBot.Common.Types
                 : currentTime.ToString(@"mm\:ss");
         }
 
-        public static Embed GetEmbed(this Song song, string title = "", bool embedThumbnail = true, bool showDuration = false, double volume = 1)
+        public static Embed GetEmbed(this Song song, string title = "", bool embedThumbnail = true, double volume = 1)
         {
             const char progressChar = '─';
             const string currentHead = ":white_circle:";
@@ -66,8 +67,7 @@ namespace MagicConchBot.Common.Types
             builder.AddField(field =>
             {
                 field.WithName(title == string.Empty ? song.Name == string.Empty ? "Default" : song.Name : title)
-                    .WithValue($"**Url**:\n{song.OriginalUrl}\n\n**Duration**:\n" +
-                               (showDuration ? timeString : $"{length}"));
+                    .WithValue($"**Url**:\n{song.OriginalUrl}\n\n**Duration**:\n" + length);
             });
 
             if (song.ThumbnailUrl != string.Empty && embedThumbnail)

@@ -16,9 +16,9 @@ namespace MagicConchBot.Common.Interfaces
 
         List<Song> GetSongs();
 
-        Maybe<Song> CurrentSong { get; }
+        Song? CurrentSong { get; }
 
-        Maybe<Song> LastSong { get; }
+        Song? LastSong { get; }
         
         PlayMode PlayMode { get; set; }
 
@@ -31,12 +31,14 @@ namespace MagicConchBot.Common.Interfaces
 
         Task Pause();
 
-        bool Skip();
+        Task<bool> Skip(IInteractionContext msg, GuildSettings settings);
 
         void QueueSong(Song song);
 
-        Task<Maybe<Song>> RemoveSong(int songNumber);
+        Task<Song?> RemoveSong(int songNumber);
 
         void ClearQueue();
+
+        void ShuffleQueue();
     }
 }

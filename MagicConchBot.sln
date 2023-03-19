@@ -10,7 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		docker-compose.yml = docker-compose.yml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MagicConchBot.Test", "MagicConchBot.Test\MagicConchBot.Test.csproj", "{818D8AA3-1D65-410C-B819-5187E9FDDF24}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MagicConchBot.Test", "MagicConchBot.Test\MagicConchBot.Test.csproj", "{818D8AA3-1D65-410C-B819-5187E9FDDF24}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

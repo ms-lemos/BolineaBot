@@ -12,7 +12,7 @@ namespace MagicConchBot.Services.Music
 
         public Task<Song> GetSongInfoAsync(string url)
         {
-            return Task.FromResult(new Song(url.Split("/").Last(), new SongTime(), OriginalUrl: url, StreamUri: url));
+            return Task.FromResult(new Song(url.Split("/").Last(), new SongTime(), OriginalUrl: url, DefaultStreamUri: url));
         }
 
         // Output 
@@ -21,7 +21,7 @@ namespace MagicConchBot.Services.Music
             // TODO: Add song info from container?
             // parse title from format (global) tags using ffprobe
             // ex: ./ffprobe -i "E:\Music\love is not dying (deluxe)\02 we're fucked, it's fine.mp3" -hide_banner -loglevel fatal -show_error -show_entries format_tags=title -of csv="p=0"
-            return Task.FromResult(song with { StreamUri = song.OriginalUrl });
+            return Task.FromResult(song with { DefaultStreamUri = song.OriginalUrl });
         }
     }
 }

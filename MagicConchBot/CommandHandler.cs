@@ -47,11 +47,9 @@ namespace MagicConchBot.Handlers
 
         private async Task ClientReady()
         {
-#if DEBUG
-            await _interactionService.RegisterCommandsToGuildAsync(820144843396612127);
-#else
+
             await _interactionService.RegisterCommandsGloballyAsync();
-#endif
+
         }
 
         public async Task InstallAsync()
@@ -152,7 +150,7 @@ namespace MagicConchBot.Handlers
                 guildServiceProvider
                     .AddService<ISongInfoService, YoutubeInfoService>(guild.Id)
                     .AddService<ISongInfoService, SoundCloudInfoService>(guild.Id)
-                    .AddService<ISongInfoService, SpotifyResolveService>(guild.Id)
+                    //.AddService<ISongInfoService, SpotifyResolveService>(guild.Id)
                     .AddService<ISongInfoService, BandcampResolveService>(guild.Id)
                     .AddService<ISongInfoService, DirectPlaySongResolver>(guild.Id)
                     .AddService<ISongInfoService, LocalStreamResolver>(guild.Id)

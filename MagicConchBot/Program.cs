@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using System.Net.Http;
 using Discord.Interactions;
+using System.Linq;
 
 namespace MagicConchBot
 {
@@ -33,7 +34,7 @@ namespace MagicConchBot
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             .InformationalVersion;
 
-        public static void Main()
+        public static void Main(string[] args)
         {
             Logging.ConfigureLogs();
 
@@ -47,7 +48,7 @@ namespace MagicConchBot
             try
             {
                 _cts = new CancellationTokenSource();
-                Task.Factory.StartNew(async () => await MainAsync(_cts.Token), _cts.Token).Wait();
+                Task.Factory.StartNew(async () => await MainAsync(args, _cts.Token), _cts.Token).Wait();
 
                 while (!_cts.Token.IsCancellationRequested)
                 {
@@ -103,7 +104,7 @@ namespace MagicConchBot
             }
         }
 
-        private static async Task MainAsync(CancellationToken cancellationToken)
+        private static async Task MainAsync(string[] args, CancellationToken cancellationToken)
         {
             using var services = ConfigureServices();
             _client = services.GetService<DiscordSocketClient>();
@@ -112,20 +113,20 @@ namespace MagicConchBot
             try
             {
                 _client.Log += a => { Log.WriteToLog(a); return Task.CompletedTask; };
+                
                 var commandHandler = services.GetService<CommandHandler>();
 
                 commandHandler.SetupEvents();
                 await commandHandler.InstallAsync();
 
-
-
+                if (args != null && args.Any())
+                { 
+                    Configuration.Token = args[0];
+                }
 
                 // Configuration.Load().Token
                 await _client.LoginAsync(TokenType.Bot, Configuration.Token);
                 await _client.StartAsync();
-
-
-
 
                 await Task.Delay(-1, cancellationToken).ConfigureAwait(false);
             }
@@ -149,8 +150,6 @@ namespace MagicConchBot
             var config = new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Info,
-
-
             };
 
             return new ServiceCollection()
@@ -165,7 +164,7 @@ namespace MagicConchBot
                 .AddSingleton<IMp3ConverterService, Mp3ConverterService>()
                 .AddSingleton<ISongInfoService, YoutubeInfoService>()
                 .AddSingleton<ISongInfoService, SoundCloudInfoService>()
-                .AddSingleton<ISongInfoService, SpotifyResolveService>()
+                //.AddSingleton<ISongInfoService, SpotifyResolveService>()
                 .AddSingleton<ISongInfoService, BandcampResolveService>()
                 .AddSingleton<ISongInfoService, DirectPlaySongResolver>()
                 //.AddSingleton<ISongInfoService, YoutubeDlResolver>()

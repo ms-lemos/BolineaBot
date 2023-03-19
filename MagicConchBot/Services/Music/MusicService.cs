@@ -12,6 +12,7 @@ using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Common.Types;
 using MagicConchBot.Helpers;
 using NLog;
+using YoutubeExplode.Videos.Streams;
 
 namespace MagicConchBot.Services.Music
 {
@@ -26,21 +27,40 @@ namespace MagicConchBot.Services.Music
 
         private CancellationTokenSource _tokenSource;
 
+        private IUserMessage _currentPlayingMessage;
+
         public MusicService(IEnumerable<ISongInfoService> songResolvers, ISongPlayer songPlayer)
         {
             _songResolvers = songResolvers;
             _songPlayer = songPlayer;
             _songPlayer.OnSongCompleted += async (s, e) => await PlayNextSong(s, e);
+            _songPlayer.OnSongError += async (s, e) => await PlayNextSong(s, e);
+            _songPlayer.OnSongError += async (s, e) => Log.Error(e.ex);
             _songList = new List<Song>();
             PlayMode = PlayMode.Queue;
-            LastSong = Maybe.None;
+            LastSong = null;
+            _currentPlayingMessage = null;
         }
 
-        public float GetVolume() {
+        private List<Song> _songList { get; }
+
+        public PlayMode PlayMode { get; set; }
+
+        public Song? LastSong { get; private set; }
+
+        public Song? CurrentSong => HasNextSong ? _songList[_songIndex] : null;
+
+        public bool HasNextSong => _songIndex >= 0 && _songIndex < _songList.Count;
+
+        public bool IsPlaying => _songPlayer.IsPlaying();
+
+        public float GetVolume()
+        {
             return _songPlayer.GetVolume();
         }
 
-        public void SetVolume(float value) {
+        public void SetVolume(float value)
+        {
             _songPlayer.SetVolume(value);
         }
 
@@ -49,58 +69,73 @@ namespace MagicConchBot.Services.Music
             return _songList;
         }
 
-        private List<Song> _songList { get; }
-
-        public PlayMode PlayMode { get; set; }
-
-        public Maybe<Song> LastSong { get; private set; }
-
-        public Maybe<Song> CurrentSong => _songIndex >= 0 && _songIndex < _songList.Count ? Maybe.From(_songList[_songIndex]) : Maybe.None;
-
-        public bool IsPlaying => _songPlayer.IsPlaying();
-
-        private async Task<Song> ResolveSong(Song song)
-        {
-            var properResolver = _songResolvers.FirstOrDefault(resolver => resolver.Regex.IsMatch(song.OriginalUrl));
-            return await properResolver.ResolveStreamUri(song);
-        }
-
-        private async Task PlayNextSong(object sender, SongCompletedArgs e)
-        {
-            LastSong = e.Song;
-
-            if (PlayMode == PlayMode.Queue)
-            {
-                CurrentSong.Execute(song => _songList.Remove(song));
-            }
-            else
-            {
-                _songIndex = (_songIndex + 1) % _songList.Count;
-            }
-
-            await CurrentSong.Map(song =>
-                Play(e.Client, e.MessageChannel, song, e.Bitrate)
-            ).ExecuteNoValue(() => AudioHelper.LeaveChannelAsync(e.Client));
-        }
-
         public async Task Play(IInteractionContext context, GuildSettings settings)
         {
-            await CurrentSong.Execute(async song =>
+            if (CurrentSong == null) return;
+
+            IVoiceChannel audioChannel = await AudioHelper.GetAudioChannel(context);
+            IAudioClient audioClient = await AudioHelper.JoinChannelAsync(audioChannel);
+
+            if (audioClient == null)
             {
-                IVoiceChannel audioChannel = await AudioHelper.GetAudioChannel(context);
-                IAudioClient audioClient = await AudioHelper.JoinChannelAsync(audioChannel);
+                await context.Channel.SendMessageAsync("Failed to join voice channel.");
+                return;
+            }
 
-                if (audioClient == null)
-                {
-                    await context.Channel.SendMessageAsync("Failed to join voice channel.");
-                    return;
-                }
-
-                await Play(audioClient, context.Channel, song, audioChannel.Bitrate);
-            });
+            await Play(audioClient, context.Channel, CurrentSong.Value, audioChannel.Bitrate);
         }
 
-        public async Task Play(IAudioClient audioClient, IMessageChannel channel, Song song, int bitrate)
+        public async Task Stop()
+        {
+            await DeleteCurrentPlayingMessage();
+            _songList.Clear();
+            await _songPlayer.Stop();
+        }
+
+        public async Task Pause()
+        {
+            await DeleteCurrentPlayingMessage();
+            await _songPlayer.Pause();
+        }
+
+        public async Task<bool> Skip(IInteractionContext context, GuildSettings settings)
+        {
+            await _songPlayer.Stop();
+            SkipSong();
+            await Play(context, settings);
+            return HasNextSong;
+        }
+
+        public void QueueSong(Song song)
+        {
+            _songList.Add(song);
+        }
+
+        public async Task<Song?> RemoveSong(int songNumber)
+        {
+            if (songNumber < 0 || songNumber >= _songList.Count)
+                return null;
+
+            if (songNumber == 0)
+                await Stop();
+
+            var song = _songList[songNumber];
+            _songList.Remove(song);
+
+            return song;
+        }
+
+        public void ClearQueue()
+        {
+            _songList.Clear();
+        }
+
+        public void ShuffleQueue()
+        {
+            _songList.Shuffle();
+        }
+
+        private async Task Play(IAudioClient audioClient, IMessageChannel channel, Song song, int bitrate)
         {
             if (_tokenSource == null || _tokenSource.Token.IsCancellationRequested)
             {
@@ -116,7 +151,7 @@ namespace MagicConchBot.Services.Music
 
                 Log.Info($"Playing song {resolvedSong.Name} at {channel.Name}");
                 _songPlayer.PlaySong(audioClient, channel, resolvedSong, bitrate);
-                await StatusUpdater(channel).ConfigureAwait(false);
+                await StatusUpdater(channel, resolvedSong).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -125,96 +160,70 @@ namespace MagicConchBot.Services.Music
             }
         }
 
-        private async Task StatusUpdater(IMessageChannel channel)
+        private async Task<Song> ResolveSong(Song song)
         {
-            await Task.Factory.StartNew(async () =>
+            var properResolver = _songResolvers.FirstOrDefault(resolver => resolver.Regex.IsMatch(song.OriginalUrl));
+            return await properResolver.ResolveStreamUri(song);
+        }
+
+        private async Task DeleteCurrentPlayingMessage()
+        {
+            await _currentPlayingMessage?.DeleteAsync();
+            _currentPlayingMessage = null;
+        }
+
+        private async Task PlayNextSong(object sender, SongArgs e)
+        {
+            LastSong = e.Song;
+
+            SkipSong();
+
+            if (HasNextSong)
             {
-                IUserMessage message = null;
-                try
+                await Play(e.Client, e.MessageChannel, CurrentSong.Value, e.Bitrate);
+            }
+            else
+            {
+                await AudioHelper.LeaveChannelAsync(e.Client);
+            }
+        }
+
+        private void SkipSong()
+        {
+            if (PlayMode == PlayMode.Queue)
+            {
+                if (HasNextSong)
+                    _songList.Remove(CurrentSong.Value);
+            }
+            else
+            {
+                _songIndex = (_songIndex + 1) % _songList.Count;
+            }
+        }
+
+        private async Task StatusUpdater(IMessageChannel channel, Song song)
+        {
+            try
+            {
+                if (_currentPlayingMessage != null)
                 {
-                    var time = 2000;
-                    var stopwatch = new Stopwatch();
-
-                    await CurrentSong.Execute(async song =>
-                    {
-
-                        message = await channel.SendMessageAsync(string.Empty, false, song.GetEmbed("", true, true, GetVolume()));
-
-                        while (IsPlaying)
-                        {
-                            // Song changed or stopped. Stop updating song info.
-                            await CurrentSong.Where(current => current.Identifier == song.Identifier).Execute(async song =>
-                            {
-                                var embed = song.GetEmbed("", true, true, GetVolume());
-                                await message.ModifyAsync(m => m.Embed = embed);
-                                var ms = stopwatch.ElapsedMilliseconds;
-                                if (ms < time)
-                                {
-                                    await Task.Delay(time - (int)ms);
-                                }
-                                stopwatch.Restart();
-                            });
-                        }
-                    });
-
+                    var embed = song.GetEmbed("", true, GetVolume());
+                    await _currentPlayingMessage.ModifyAsync(m => m.Embed = embed);
                 }
-                catch (OperationCanceledException ex)
+
+                else
                 {
-                    Log.Debug($"Player task cancelled: {ex.Message}");
+                    _currentPlayingMessage = await channel.SendMessageAsync(string.Empty, false, song.GetEmbed("", true, GetVolume()));
                 }
-                catch (Exception ex)
-                {
-                    Log.Debug(ex.ToString());
-                }
-                finally
-                {
-                    if (message != null)
-                    {
-                        await message.DeleteAsync(new RequestOptions() { RetryMode = RetryMode.AlwaysRetry });
-                    }
-                }
-            }, _tokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
-        }
-
-        public async Task Stop()
-        {
-            _songList.Clear();
-            await _songPlayer.Stop();
-        }
-
-        public async Task Pause()
-        {
-            await _songPlayer.Pause();
-        }
-
-        public bool Skip()
-        {
-            _songPlayer.Stop();
-            return true;
-        }
-
-        public void QueueSong(Song song)
-        {
-            _songList.Add(song);
-        }
-
-        public async Task<Maybe<Song>> RemoveSong(int songNumber)
-        {
-            if (songNumber < 0 || songNumber >= _songList.Count)
-                return Maybe.None;
-
-            if (songNumber == 0)
-                await Stop();
-
-            var song = _songList[songNumber];
-            _songList.Remove(song);
-
-            return song;
-        }
-
-        public void ClearQueue()
-        {
-            _songList.Clear();
+            }
+            catch (OperationCanceledException ex)
+            {
+                Log.Debug($"Player task cancelled: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex.ToString());
+            }
         }
     }
 }
