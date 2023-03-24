@@ -1,18 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using Discord;
+﻿using Discord;
 using Discord.Audio;
 using MagicConchBot.Common.Enums;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Common.Types;
 using MagicConchBot.Helpers;
 using NLog;
-using YoutubeExplode.Videos.Streams;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Services.Music
 {
@@ -33,24 +30,24 @@ namespace MagicConchBot.Services.Music
         {
             _songResolvers = songResolvers;
             _songPlayer = songPlayer;
-            _songPlayer.OnSongCompleted += async (s, e) => await PlayNextSong(s, e);
-            _songPlayer.OnSongError += async (s, e) => await PlayNextSong(s, e);
-            _songPlayer.OnSongError += async (s, e) => Log.Error(e.ex);
-            _songList = new List<Song>();
+            _songPlayer.OnSongCompleted += async (s, e) => await PlayNextSong(e);
+            _songPlayer.OnSongError += async (s, e) => await PlayNextSong(e);
+            _songPlayer.OnSongError += (s, e) => { Log.Error(e.Ex); return Task.CompletedTask; };
+            SongList = new List<Song>();
             PlayMode = PlayMode.Queue;
             LastSong = null;
             _currentPlayingMessage = null;
         }
 
-        private List<Song> _songList { get; }
+        private List<Song> SongList { get; }
 
         public PlayMode PlayMode { get; set; }
 
         public Song? LastSong { get; private set; }
 
-        public Song? CurrentSong => HasNextSong ? _songList[_songIndex] : null;
+        public Song? CurrentSong => HasNextSong ? SongList[_songIndex] : null;
 
-        public bool HasNextSong => _songIndex >= 0 && _songIndex < _songList.Count;
+        public bool HasNextSong => _songIndex >= 0 && _songIndex < SongList.Count;
 
         public bool IsPlaying => _songPlayer.IsPlaying();
 
@@ -66,14 +63,14 @@ namespace MagicConchBot.Services.Music
 
         public List<Song> GetSongs()
         {
-            return _songList;
+            return SongList;
         }
 
-        public async Task Play(IInteractionContext context, GuildSettings settings)
+        public async Task Play(IInteractionContext context)
         {
             if (CurrentSong == null) return;
 
-            IVoiceChannel audioChannel = await AudioHelper.GetAudioChannel(context);
+            IVoiceChannel audioChannel = AudioHelper.GetAudioChannel(context);
             IAudioClient audioClient = await AudioHelper.JoinChannelAsync(audioChannel);
 
             if (audioClient == null)
@@ -88,7 +85,7 @@ namespace MagicConchBot.Services.Music
         public async Task Stop()
         {
             await DeleteCurrentPlayingMessage();
-            _songList.Clear();
+            SongList.Clear();
             await _songPlayer.Stop();
         }
 
@@ -98,41 +95,41 @@ namespace MagicConchBot.Services.Music
             await _songPlayer.Pause();
         }
 
-        public async Task<bool> Skip(IInteractionContext context, GuildSettings settings)
+        public async Task<bool> Skip(IInteractionContext context)
         {
             await _songPlayer.Stop();
             SkipSong();
-            await Play(context, settings);
+            await Play(context);
             return HasNextSong;
         }
 
         public void QueueSong(Song song)
         {
-            _songList.Add(song);
+            SongList.Add(song);
         }
 
         public async Task<Song?> RemoveSong(int songNumber)
         {
-            if (songNumber < 0 || songNumber >= _songList.Count)
+            if (songNumber < 0 || songNumber >= SongList.Count)
                 return null;
 
             if (songNumber == 0)
                 await Stop();
 
-            var song = _songList[songNumber];
-            _songList.Remove(song);
+            var song = SongList[songNumber];
+            SongList.Remove(song);
 
             return song;
         }
 
         public void ClearQueue()
         {
-            _songList.Clear();
+            SongList.Clear();
         }
 
         public void ShuffleQueue()
         {
-            _songList.Shuffle();
+            SongList.Shuffle();
         }
 
         private async Task Play(IAudioClient audioClient, IMessageChannel channel, Song song, int bitrate)
@@ -145,7 +142,7 @@ namespace MagicConchBot.Services.Music
             try
             {
                 var resolvedSong = await ResolveSong(song);
-                _songList[_songIndex] = resolvedSong;
+                SongList[_songIndex] = resolvedSong;
 
                 _tokenSource.Token.ThrowIfCancellationRequested();
 
@@ -156,7 +153,7 @@ namespace MagicConchBot.Services.Music
             catch (Exception ex)
             {
                 Log.Debug(ex.ToString());
-                _songList.RemoveAt(_songIndex);
+                SongList.RemoveAt(_songIndex);
             }
         }
 
@@ -172,7 +169,7 @@ namespace MagicConchBot.Services.Music
             _currentPlayingMessage = null;
         }
 
-        private async Task PlayNextSong(object sender, SongArgs e)
+        private async Task PlayNextSong(SongArgs e)
         {
             LastSong = e.Song;
 
@@ -193,11 +190,11 @@ namespace MagicConchBot.Services.Music
             if (PlayMode == PlayMode.Queue)
             {
                 if (HasNextSong)
-                    _songList.Remove(CurrentSong.Value);
+                    SongList.Remove(CurrentSong.Value);
             }
             else
             {
-                _songIndex = (_songIndex + 1) % _songList.Count;
+                _songIndex = (_songIndex + 1) % SongList.Count;
             }
         }
 

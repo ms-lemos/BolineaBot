@@ -1,9 +1,7 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.Commands;
-using MagicConchBot.Resources;
+using System;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Attributes
 {
@@ -12,10 +10,6 @@ namespace MagicConchBot.Attributes
         public override Task<PreconditionResult> CheckPermissionsAsync(ICommandContext context, CommandInfo command,
             IServiceProvider map)
         {
-
-            if (Configuration.Owners.Contains(context.User.Id))
-                return Task.FromResult(PreconditionResult.FromSuccess());
-
             var channel = (context.User as IGuildUser)?.VoiceChannel;
             return channel != null
                 ? Task.FromResult(PreconditionResult.FromSuccess())

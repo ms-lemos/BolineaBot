@@ -1,18 +1,15 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using Discord.Interactions;
-
+﻿using Discord.Interactions;
 using MagicConchBot.Attributes;
 using MagicConchBot.Common.Enums;
 using MagicConchBot.Common.Types;
 using MagicConchBot.Helpers;
+using System.Linq;
+using System.Threading.Tasks;
 using GroupAttribute = Discord.Interactions.GroupAttribute;
 
 namespace MagicConchBot.Modules
 {
     [RequireUserInVoiceChannel]
-    [RequireBotControlRole]
     [Group("queue", "Queue Commands")]
     public class QueueModule : InteractionModuleBase<ConchInteractionCommandContext>
     {
@@ -34,7 +31,7 @@ namespace MagicConchBot.Modules
             else
             {
 
-                foreach (var text in await SongHelper.DisplaySongsClean(songs.ToArray(), Context))
+                foreach (var text in SongHelper.DisplaySongsClean(songs.ToArray()))
                 {
                     await ReplyAsync(text);
                 }
@@ -53,7 +50,7 @@ namespace MagicConchBot.Modules
         {
             var song = await Context.MusicService.RemoveSong(songNumber);
 
-            if(song == null)
+            if (song == null)
             {
                 await RespondAsync($"No song at position: {songNumber}");
             }

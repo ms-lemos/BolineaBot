@@ -1,12 +1,11 @@
-﻿using System;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using MagicConchBot.Common.Interfaces;
+﻿using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Common.Types;
 using MagicConchBot.Resources;
 using SpotifyAPI.Web;
+using System;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using YoutubeExplode;
 using YoutubeExplode.Videos;
 
@@ -28,7 +27,7 @@ namespace MagicConchBot.Services
             );
         }
 
-        private YoutubeClient youtubeClient = new();
+        private readonly YoutubeClient youtubeClient = new();
 
         public SpotifyClient Client { get; set; }
 

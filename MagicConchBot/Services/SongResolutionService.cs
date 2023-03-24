@@ -1,12 +1,10 @@
-﻿using System;
+﻿using MagicConchBot.Common.Interfaces;
+using MagicConchBot.Common.Types;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using MagicConchBot.Common.Interfaces;
-using MagicConchBot.Helpers;
-using MagicConchBot.Common.Types;
-using CSharpFunctionalExtensions;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Services
 {

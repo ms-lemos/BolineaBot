@@ -1,6 +1,6 @@
-﻿using System;
+﻿using MagicConchBot.Common.Types;
+using System;
 using System.Threading.Tasks;
-using MagicConchBot.Common.Types;
 
 namespace MagicConchBot.Services
 {

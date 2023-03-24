@@ -2,18 +2,12 @@
 using Discord.Audio;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Common.Types;
-using MagicConchBot.Helpers;
 using NLog;
-using Stateless;
+using System;
 using System.Diagnostics;
 using System.IO;
-using System;
 using System.Threading;
 using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using SharpCompress.Common;
-using LiteDB;
-using YoutubeExplode.Videos.Streams;
 
 namespace MagicConchBot.Services.Music
 {
@@ -50,7 +44,7 @@ namespace MagicConchBot.Services.Music
 
             try
             {
-                await PlaySong();
+                await PlaySong(channel);
                 await HandleSongCompleted();
             }
             catch (OperationCanceledException ex)
@@ -74,7 +68,7 @@ namespace MagicConchBot.Services.Music
 
         public Task Pause()
         {
-            currentSong.Time.StartTime = currentSong.Time.CurrentTime.GetValueOrThrow("No value");
+            currentSong.Time.StartTime = currentSong.Time.CurrentTime;
 
             tokenSource.Cancel();
 
@@ -96,7 +90,7 @@ namespace MagicConchBot.Services.Music
             return !_currentPlaying?.IsCompleted ?? false;
         }
 
-        private async Task PlaySong()
+        private async Task PlaySong(IMessageChannel channel)
         {
             using var process = StartFfmpeg(currentSong);
             using var inStream = process.StandardOutput.BaseStream;
@@ -121,22 +115,16 @@ namespace MagicConchBot.Services.Music
 
             if (!currentSong.IsResolved)
             {
-                Log.Info($"Skippped unresolved song: {currentSong.Name}");
+                var message = $"Skippped unresolved song: {currentSong.Name}";
+                await channel.SendMessageAsync(message);
+                Log.Info(message);
                 return;
             }
 
-            if (currentSong.OpusUri == null)
-            {
-                FrameSize = 4096;
-                using AudioOutStream outStream = audioClient.CreatePCMStream(AudioApplication.Music, Bitrate);
-                await StreamAudio(currentSong, inStream, outStream);
-            }
-            else
-            {
-                FrameSize = 1500;
-                using AudioOutStream outStream = audioClient.CreateOpusStream();
-                await StreamAudio(currentSong, inStream, outStream);
-            }
+            FrameSize = 4096;
+            using AudioOutStream outStream = audioClient.CreatePCMStream(AudioApplication.Music, Bitrate);
+            _currentPlaying = StreamAudio(currentSong, inStream, outStream);
+            await _currentPlaying;
         }
 
         private async Task StreamAudio(Song song, Stream inStream, AudioOutStream outStream)
@@ -147,10 +135,8 @@ namespace MagicConchBot.Services.Music
             Log.Debug("Playing song.");
             song.Time.CurrentTime = song.Time.StartTime.GetValueOrDefault(TimeSpan.Zero);
 
-            while (true)
+            while (!tokenSource.IsCancellationRequested)
             {
-                tokenSource.Token.ThrowIfCancellationRequested();
-
                 var byteCount = await inStream.ReadAsync(buffer.AsMemory(0, buffer.Length), tokenSource.Token);
 
                 if (byteCount == 0)
@@ -174,31 +160,24 @@ namespace MagicConchBot.Services.Music
                     retryCount = 0;
                 }
 
-                //buffer = AudioHelper.ChangeVol(buffer, Volume);
 
                 if (outStream.CanWrite)
                 {
                     await outStream.WriteAsync(buffer.AsMemory(0, byteCount), tokenSource.Token);
-                    //await outStream.FlushAsync(tokenSource.Token);
                 }
 
-                song.Time.CurrentTime = song.Time.CurrentTime.Map(current => current + CalculateCurrentTime(byteCount));
+                song.Time.CurrentTime += CalculateCurrentTime(byteCount);
 
             }
 
             await outStream.FlushAsync(tokenSource.Token);
         }
 
-        private Process StartFfmpeg(Song song)
+        private static Process StartFfmpeg(Song song)
         {
-            var seek = song.Time.StartTime.Map(totalSeconds => $"-ss {totalSeconds}").GetValueOrDefault(string.Empty);
+            var seek = song.Time.StartTime.HasValue ? $"-ss {song.Time.StartTime.Value}" : string.Empty;
 
-            //var arguments = $"-hide_banner -loglevel panic -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.StreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:1";
-            var stdArguments = $"-hide_banner -loglevel panic -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.DefaultStreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:1";
-            var opusArguments = $"-hide_banner -loglevel warning -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.OpusUri}\" {seek} -c:a libopus -b:a {Bitrate} -f opus pipe:1";
-            // -preset slow -crf 18 -c:a copy -pix_fmt yuv420p
-
-            var arguments = song.OpusUri == null ? stdArguments : opusArguments;
+            var arguments = $"-hide_banner -loglevel warning -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.DefaultStreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:";
 
             Log.Debug(arguments);
 
@@ -206,13 +185,11 @@ namespace MagicConchBot.Services.Music
             {
                 FileName = "ffmpeg",
                 Arguments = arguments,
-
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
                 UseShellExecute = false
             };
-
             var process = new Process()
             {
                 StartInfo = startInfo

@@ -8,7 +8,6 @@ namespace MagicConchBot
 {
     public static class Logging
     {
-
         public static void ConfigureLogs()
         {
             // Step 1. Create configuration object 
@@ -23,13 +22,6 @@ namespace MagicConchBot
             config.AddTarget("file", fileTarget);
 
             consoleTarget.UseDefaultRowHighlightingRules = false;
-
-            ConsoleRowHighlightingRule RowHighlight(LogLevel loglevel, ConsoleOutputColor foregroundColor,
-                ConsoleOutputColor backgroundColor = ConsoleOutputColor.Black)
-            {
-                var condition = ConditionParser.ParseExpression($"level == {loglevel.GetType().Name}.{loglevel}");
-                return new ConsoleRowHighlightingRule(condition, foregroundColor, backgroundColor);
-            }
 
             consoleTarget.RowHighlightingRules.Add(RowHighlight(LogLevel.Info, ConsoleOutputColor.Green));
             consoleTarget.RowHighlightingRules.Add(RowHighlight(LogLevel.Debug, ConsoleOutputColor.Yellow));
@@ -77,6 +69,13 @@ namespace MagicConchBot
                     Log.Fatal(message.Exception, message.Message);
                     break;
             }
+        }
+
+        private static ConsoleRowHighlightingRule RowHighlight(LogLevel loglevel, ConsoleOutputColor foregroundColor,
+            ConsoleOutputColor backgroundColor = ConsoleOutputColor.Black)
+        {
+            var condition = ConditionParser.ParseExpression($"level == {loglevel.GetType().Name}.{loglevel}");
+            return new ConsoleRowHighlightingRule(condition, foregroundColor, backgroundColor);
         }
     }
 }

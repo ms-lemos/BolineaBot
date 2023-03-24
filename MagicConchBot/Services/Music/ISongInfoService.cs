@@ -1,13 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using MagicConchBot.Common.Types;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using MagicConchBot.Common.Types;
 
 namespace MagicConchBot.Common.Interfaces
 {
+    // todo: extract these implementations to base class, keep interface as clean contract
     public interface ISongInfoService
     {
         Regex Regex { get; }
@@ -21,17 +22,19 @@ namespace MagicConchBot.Common.Interfaces
         /// <returns></returns>
         async Task<Song> ResolveStreamUri(Song song)
         {
-            var youtubeDlInfo = await DefaultSongInfo.GetUrlFromYoutubeDlAsync(song.Identifier);
-            return youtubeDlInfo
-                .Map(urls => urls.First())
-                .Map(url => song with { DefaultStreamUri = url})
-                .GetValueOrThrow($"Could not resolve song uri from youtube-dl for {song}");
-        }
-    }
+            var youtubeDlInfo = await GetUrlFromYoutubeDlAsync(song.Identifier);
 
-    public static class DefaultSongInfo
-    {
-        public static async Task<Maybe<List<string>>> GetUrlFromYoutubeDlAsync(string url)
+            var url = youtubeDlInfo.First();
+
+            if (string.IsNullOrEmpty(url))
+            {
+                throw new Exception($"Could not resolve song uri from youtube-dl for {song}");
+            }
+
+            return song with { DefaultStreamUri = url };
+        }
+
+        private static async Task<IEnumerable<string>> GetUrlFromYoutubeDlAsync(string url)
         {
             //-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5
             var youtubeDl = new ProcessStartInfo
@@ -47,7 +50,7 @@ namespace MagicConchBot.Common.Interfaces
             var p = Process.Start(youtubeDl);
             if (p == null)
             {
-                return Maybe.None;
+                return Enumerable.Empty<string>();
             }
 
             var output = new List<string>();
@@ -57,7 +60,7 @@ namespace MagicConchBot.Common.Interfaces
                 output.Add(await p.StandardOutput.ReadLineAsync());
             }
 
-            return Maybe.From(output);
+            return output;
         }
     }
-} 
+}

@@ -1,49 +1,34 @@
-﻿using System;
-using System.IO;
-using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.Commands;
+using Discord.Interactions;
 using Discord.WebSocket;
-using MagicConchBot.Services.Music;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Handlers;
-using MagicConchBot.Helpers;
 using MagicConchBot.Resources;
 using MagicConchBot.Services;
+using MagicConchBot.Services.Music;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
-using System.Net.Http;
-using Discord.Interactions;
+using System;
 using System.Linq;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MagicConchBot
 {
     public class Program
     {
-        // Release: https://discord.com/api/oauth2/authorize?client_id=267000484420780045&permissions=8&scope=applications.commands%20bot
-        // Debug:   https://discord.com/api/oauth2/authorize?client_id=295020167732396032&permissions=8&scope=applications.commands%20bot
-
         private static CancellationTokenSource _cts;
         private static DiscordSocketClient _client;
 
-        private static Logger Log = LogManager.GetCurrentClassLogger();
-
-        private static string Version => Assembly.GetEntryAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            .InformationalVersion;
+        private static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
         public static void Main(string[] args)
         {
             Logging.ConfigureLogs();
 
-			Log.Info("To add this bot, use the url: https://discordapp.com/oauth2/authorize?client_id=267000484420780045&scope=bot&permissions=540048384");
-
-            Log.Info("Starting Magic Conch Bot. Press 'q' at any time to quit.");
-
-            Log.Info($"Version: {Version}");
-            CheckUpToDate().Wait();
+            Log.Info("Starting bolinea bot. Press 'q' at any time to quit.");
 
             try
             {
@@ -55,7 +40,7 @@ namespace MagicConchBot
                     if (!Console.IsInputRedirected && Console.KeyAvailable)
                     {
                         var key = Console.ReadKey(true).Key;
-                        if (key == ConsoleKey.Q) 
+                        if (key == ConsoleKey.Q)
                         {
                             Stop();
                         }
@@ -86,24 +71,6 @@ namespace MagicConchBot
             _cts.Cancel();
         }
 
-        private static async Task CheckUpToDate()
-        {
-            if (AppHelper.Version.Contains("dev"))
-            {
-                DebugTools.Debug = true;
-                Log.Info("Bot is using a debug version.");
-                return;
-            }
-            if (await WebHelper.UpToDateWithGitHub())
-            {
-                Log.Info("Bot is up to date! :)");
-            }
-            else
-            {
-                Log.Warn("Bot is not up to date, please update!");
-            }
-        }
-
         private static async Task MainAsync(string[] args, CancellationToken cancellationToken)
         {
             using var services = ConfigureServices();
@@ -113,18 +80,17 @@ namespace MagicConchBot
             try
             {
                 _client.Log += a => { Log.WriteToLog(a); return Task.CompletedTask; };
-                
+
                 var commandHandler = services.GetService<CommandHandler>();
 
                 commandHandler.SetupEvents();
                 await commandHandler.InstallAsync();
 
                 if (args != null && args.Any())
-                { 
+                {
                     Configuration.Token = args[0];
                 }
 
-                // Configuration.Load().Token
                 await _client.LoginAsync(TokenType.Bot, Configuration.Token);
                 await _client.StartAsync();
 
@@ -139,7 +105,6 @@ namespace MagicConchBot
             }
             finally
             {
-                //services.GetService<GuildServiceProvider>().StopAll();
                 await _client.StopAsync();
             }
         }
@@ -154,24 +119,16 @@ namespace MagicConchBot
 
             return new ServiceCollection()
                 .AddSingleton(config)
-                .AddMemoryCache()
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton<InteractionService>()
                 .AddSingleton<HttpClient>()
                 .AddSingleton<CommandHandler>()
                 .AddSingleton<CommandService>()
                 .AddSingleton<YoutubeInfoService>()
-                .AddSingleton<IMp3ConverterService, Mp3ConverterService>()
                 .AddSingleton<ISongInfoService, YoutubeInfoService>()
-                .AddSingleton<ISongInfoService, SoundCloudInfoService>()
-                //.AddSingleton<ISongInfoService, SpotifyResolveService>()
-                .AddSingleton<ISongInfoService, BandcampResolveService>()
-                .AddSingleton<ISongInfoService, DirectPlaySongResolver>()
-                //.AddSingleton<ISongInfoService, YoutubeDlResolver>()
                 .AddSingleton<ISongResolutionService, SongResolutionService>()
-                .AddSingleton<GuildServiceProvider>()
-                .AddSingleton<SoundCloudInfoService>()
-                .AddSingleton<GuildSettingsProvider>()
+                .AddSingleton<IMusicService, MusicService>()
+                .AddSingleton<ISongPlayer, FfmpegSongPlayer>()
                 .BuildServiceProvider();
         }
     }

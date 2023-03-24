@@ -1,10 +1,8 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using Discord;
+﻿using Discord;
 using MagicConchBot.Common.Enums;
 using MagicConchBot.Common.Types;
-using MagicConchBot.Services.Music;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Common.Interfaces
 {
@@ -19,19 +17,18 @@ namespace MagicConchBot.Common.Interfaces
         Song? CurrentSong { get; }
 
         Song? LastSong { get; }
-        
+
         PlayMode PlayMode { get; set; }
 
         bool IsPlaying { get; }
 
-        // Refactor GuildSettings to PlaySettings data record
-        Task Play(IInteractionContext msg, GuildSettings settings);
+        Task Play(IInteractionContext msg);
 
         Task Stop();
 
         Task Pause();
 
-        Task<bool> Skip(IInteractionContext msg, GuildSettings settings);
+        Task<bool> Skip(IInteractionContext msg);
 
         void QueueSong(Song song);
 

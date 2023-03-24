@@ -1,30 +1,31 @@
-﻿using System;
-using CSharpFunctionalExtensions;
-using Discord;
+﻿using Discord;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Resources;
+using System;
 
 namespace MagicConchBot.Common.Types
 {
     public class SongTime
     {
         public TimeSpan Length { get; set; }
-        public Maybe<TimeSpan> StartTime { get; set; }
-        public Maybe<TimeSpan> CurrentTime { get; set; } = Maybe.None;
-        public SongTime(TimeSpan? StartTime = null, TimeSpan? Length = null, TimeSpan? CurrentTime = null) {
-            this.StartTime = Maybe.From(StartTime.GetValueOrDefault());
-            this.CurrentTime = Maybe.From(CurrentTime.GetValueOrDefault());
+        public TimeSpan? StartTime { get; set; }
+        public TimeSpan? CurrentTime { get; set; }
+        public SongTime(TimeSpan? StartTime = null, TimeSpan? Length = null, TimeSpan? CurrentTime = null)
+        {
+            this.StartTime = StartTime;
+            this.CurrentTime = CurrentTime;
             this.Length = Length ?? TimeSpan.Zero;
         }
     }
 
-    public readonly record struct Song(string Name, SongTime Time, string ThumbnailUrl = "", string OriginalUrl = "", string Identifier = "", MusicType MusicType = MusicType.Other, string DefaultStreamUri = null, string OpusUri = null)
+    public readonly record struct Song(string Name, SongTime Time, string ThumbnailUrl = "", string OriginalUrl = "", string Identifier = "", MusicType MusicType = MusicType.Other, string DefaultStreamUri = null)
     {
         public bool IsResolved => DefaultStreamUri != null;
         public Song(string url) : this(url, new SongTime(), OriginalUrl: url, DefaultStreamUri: url) { }
     }
 
-    public static class SongExtensions {
+    public static class SongExtensions
+    {
         public static string GetLengthPretty(this Song song)
         {
             return song.Time.Length >= TimeSpan.FromHours(1)
@@ -46,7 +47,7 @@ namespace MagicConchBot.Common.Types
             const string currentHead = ":white_circle:";
             const int progressLength = 34;
 
-            var progressIndex = song.Time.Length == TimeSpan.Zero 
+            var progressIndex = song.Time.Length == TimeSpan.Zero
                 ? 0
                 : (int)(song.Time.CurrentTime.GetValueOrDefault().TotalSeconds / song.Time.Length.TotalSeconds * progressLength);
 
@@ -56,14 +57,14 @@ namespace MagicConchBot.Common.Types
             var currentTime = song.GetCurrentTimePretty();
 
             const char volumeChar = '─';
-			const char volumeHead = '○';
-			const int volumeLength = 4;
+            const char volumeHead = '○';
+            const int volumeLength = 4;
             var volumeIndex = (int)(volume * volumeLength);
             var volumeString = $"{new string(volumeChar, volumeIndex)}{volumeHead}{new string(volumeChar, volumeLength - volumeIndex)}";
 
             var timeString = $"\n{progressString}\n:loud_sound: {volumeString}　{currentTime.PadLeft(4, '⠀')} / {length.PadRight(20, '⠀')}\n\n";
 
-            var builder = new EmbedBuilder {Color = Constants.MaterialBlue};
+            var builder = new EmbedBuilder { Color = Constants.MaterialBlue };
             builder.AddField(field =>
             {
                 field.WithName(title == string.Empty ? song.Name == string.Empty ? "Default" : song.Name : title)

@@ -1,27 +1,17 @@
-﻿using System;
+﻿using MagicConchBot.Common.Types;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Discord;
-using MagicConchBot.Common.Types;
-using MagicConchBot.Services;
+using System.Text.RegularExpressions;
 
 namespace MagicConchBot.Helpers
 {
     public static class SongHelper
     {
-        public static Task<string> ParseUrlOrSearch(string query, YoutubeInfoService service)
-        {
-            if (!WebHelper.UrlRegex.IsMatch(query))
-            {
-                return service.GetFirstVideoByKeywordsAsync(query);
-            }
+        public static readonly Regex UrlRegex =
+            new(@"(\b(https?):\/\/)[-A-Za-z0-9+\/%?=_!.]+\.[-A-Za-z0-9+&#\/%=_]+");
 
-            return Task.FromResult(query);
-        }
-
-        public static async Task<List<string>> DisplaySongsClean(Song[] songs, IInteractionContext context)
+        public static List<string> DisplaySongsClean(Song[] songs)
         {
             var output = new List<string>();
             var sb = new StringBuilder();

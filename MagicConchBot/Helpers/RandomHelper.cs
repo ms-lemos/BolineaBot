@@ -1,9 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MagicConchBot.Helpers
 {
@@ -13,11 +9,11 @@ namespace MagicConchBot.Helpers
 
         public static Random ThisThreadsRandom
         {
-            get { return Local ?? (Local = new Random(unchecked(Environment.TickCount * 31 + Thread.CurrentThread.ManagedThreadId))); }
+            get { return Local ??= new Random(unchecked(Environment.TickCount * 31 + Environment.CurrentManagedThreadId)); }
         }
     }
 
-    static class MyExtensions
+    internal static class MyExtensions
     {
         public static void Shuffle<T>(this IList<T> list)
         {
@@ -26,9 +22,7 @@ namespace MagicConchBot.Helpers
             {
                 n--;
                 int k = ThreadSafeRandom.ThisThreadsRandom.Next(n + 1);
-                T value = list[k];
-                list[k] = list[n];
-                list[n] = value;
+                (list[n], list[k]) = (list[k], list[n]);
             }
         }
     }

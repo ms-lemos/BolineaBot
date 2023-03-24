@@ -1,36 +1,31 @@
-﻿using System;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Modules;
-using MagicConchBot.Resources;
-using MagicConchBot.Services;
-using MagicConchBot.Services.Music;
-using Microsoft.Extensions.DependencyInjection;
-using NLog;
+using System;
+using System.Reflection;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Handlers
 {
     public class CommandHandler
     {
-        private static readonly Logger Log = LogManager.GetCurrentClassLogger();
         private readonly DiscordSocketClient _client;
 
         private readonly CommandService _commands;
         private readonly InteractionService _interactionService;
         private readonly IServiceProvider _services;
+        private readonly IMusicService _musicService;
 
-        public CommandHandler(InteractionService interactionService, DiscordSocketClient client, CommandService commands, IServiceProvider services)
+        public CommandHandler(InteractionService interactionService, DiscordSocketClient client, CommandService commands, IServiceProvider services, IMusicService musicService)
         {
             _interactionService = interactionService;
             _client = client;
             _commands = commands;
             _services = services;
+            _musicService = musicService;
         }
 
         public void SetupEvents()
@@ -40,7 +35,6 @@ namespace MagicConchBot.Handlers
 
             _client.InteractionCreated += HandleInteraction;
             _client.MessageReceived += HandleCommandAsync;
-            _client.GuildAvailable += HandleGuildAvailableAsync;
             _client.JoinedGuild += HandleJoinedGuildAsync;
             _client.Ready += ClientReady;
         }
@@ -63,15 +57,12 @@ namespace MagicConchBot.Handlers
             try
             {
                 // Create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
-                var ctx = new ConchInteractionCommandContext(_client, arg, _services);
+                var ctx = new ConchInteractionCommandContext(_client, arg, _musicService);
                 await _interactionService.ExecuteCommandAsync(ctx, _services);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
-                var ownerUser = await _client.GetUserAsync(Configuration.Owners.First());
-                await ownerUser.SendMessageAsync(ex.ToString());
-
 
                 // If a Slash Command execution fails it is most likely that the original interaction acknowledgement will persist. It is a good idea to delete the original
                 // response, or at least let the user know that something went wrong during the command execution.
@@ -100,7 +91,7 @@ namespace MagicConchBot.Handlers
                 return;
 
             // Create a Command Context
-            var context = new ConchCommandContext(_client, message, _services);
+            var context = new CommandContext(_client, message);
 
             await Task.Factory.StartNew(async () =>
             {
@@ -109,25 +100,16 @@ namespace MagicConchBot.Handlers
 
                 // If the command failed, notify the user
                 if (!result.IsSuccess)
-                    if (result.ErrorReason == Configuration.WrongChannelError)
-                        await message.Channel.SendMessageAsync($"{result.ErrorReason}", true);
-                    else
-                        await message.Channel.SendMessageAsync($"**Error:** {result.ErrorReason}");
+                    await message.Channel.SendMessageAsync($"**Error:** {result.ErrorReason}");
             }, TaskCreationOptions.LongRunning).ConfigureAwait(false);
         }
 
-        public async Task LogAsync(LogMessage logMessage) {
-            if (logMessage.Exception is Exception exception)
+        public static async Task LogAsync(LogMessage logMessage)
+        {
+            if (logMessage.Exception is CommandException cmdException)
             {
-                var ownerUser = await _client.GetUserAsync(Configuration.Owners.First());
-                await ownerUser.SendMessageAsync(exception.ToString());
-            }
-            else if (logMessage.Exception is CommandException cmdException) {
                 // We can tell the user that something unexpected has happened
                 await cmdException.Context.Channel.SendMessageAsync("Something went catastrophically wrong!");
-
-                var ownerUser = await _client.GetUserAsync(Configuration.Owners.First());
-                await ownerUser.SendMessageAsync(cmdException.ToString());
 
                 // We can also log this incident
                 Console.WriteLine($"{cmdException.Context.User} failed to execute '{cmdException.Command.Name}' in {cmdException.Context.Channel}.");
@@ -138,27 +120,7 @@ namespace MagicConchBot.Handlers
         private async Task HandleJoinedGuildAsync(SocketGuild arg)
         {
             await _interactionService.RegisterCommandsToGuildAsync(arg.Id);
-            await HandleGuildAvailableAsync(arg);
-            await arg.DefaultChannel.SendMessageAsync($"All hail the Magic Conch. In order to use the Music functions of this bot, please create a role named '{Configuration.RequiredRole}' and add that role to the users whom you want to be able to control the Music functions of this bot. Type !help for help.");
-        }
-
-        private Task HandleGuildAvailableAsync(SocketGuild guild)
-        {
-            return Task.Run(() =>
-            {
-                var guildServiceProvider = _services.GetService<GuildServiceProvider>();
-                guildServiceProvider
-                    .AddService<ISongInfoService, YoutubeInfoService>(guild.Id)
-                    .AddService<ISongInfoService, SoundCloudInfoService>(guild.Id)
-                    //.AddService<ISongInfoService, SpotifyResolveService>(guild.Id)
-                    .AddService<ISongInfoService, BandcampResolveService>(guild.Id)
-                    .AddService<ISongInfoService, DirectPlaySongResolver>(guild.Id)
-                    .AddService<ISongInfoService, LocalStreamResolver>(guild.Id)
-                    .AddService<ISongPlayer, FfmpegSongPlayer>(guild.Id)
-                    .AddService<IMusicService, MusicService>(guild.Id)
-                    .AddService<IMp3ConverterService, Mp3ConverterService>(guild.Id);
-
-            });
+            await arg.DefaultChannel.SendMessageAsync($"All hail the bolinea bot.");
         }
     }
 }

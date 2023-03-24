@@ -12,6 +12,6 @@ public class UnitTest
         var testUrl = "https://foisey.bandcamp.com/track/layitdwn";
 
         var bandcampApi = new BandcampApi();
-        bandcampApi.GetSongInfo(testUrl);
+        await bandcampApi.GetSongInfo(testUrl);
     }
 }

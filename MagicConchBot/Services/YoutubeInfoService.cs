@@ -1,12 +1,11 @@
-﻿using System;
+﻿using MagicConchBot.Common.Interfaces;
+using MagicConchBot.Common.Types;
+using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using CSharpFunctionalExtensions;
-using MagicConchBot.Common.Interfaces;
-using MagicConchBot.Common.Types;
-using NLog;
 using YoutubeExplode;
 using YoutubeExplode.Playlists;
 using YoutubeExplode.Videos;
@@ -16,8 +15,7 @@ namespace MagicConchBot.Services
     public class YoutubeInfoService : ISongInfoService
     {
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
-
-        YoutubeClient _youtubeClient;
+        private readonly YoutubeClient _youtubeClient;
 
         public YoutubeInfoService()
         {
@@ -88,11 +86,10 @@ namespace MagicConchBot.Services
                 var manifest = await _youtubeClient.Videos.Streams.GetManifestAsync(VideoId.Parse(song.Identifier));
                 var streams = manifest.GetAudioOnlyStreams().OrderByDescending(s => s.Bitrate);
                 var defaultStreamInfo = streams.FirstOrDefault();
-                //var opusStream = streams.FirstOrDefault(s => s.AudioCodec == "opus");
 
-                return song with { DefaultStreamUri = defaultStreamInfo.Url/*, OpusUri = opusStream.Url */};
+                return song with { DefaultStreamUri = defaultStreamInfo.Url };
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Log.Error($"Failed to fetch youtube info: {ex.Message}");
                 return song;

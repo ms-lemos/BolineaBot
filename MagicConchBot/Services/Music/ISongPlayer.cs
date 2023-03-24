@@ -1,14 +1,14 @@
-﻿using System;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.Audio;
 using MagicConchBot.Common.Types;
+using System;
+using System.Threading.Tasks;
 
 namespace MagicConchBot.Common.Interfaces
 {
-    public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
+    public delegate Task AsyncEventHandler<TEventArgs>(object sender, TEventArgs e);
     public record SongArgs(IAudioClient Client, IMessageChannel MessageChannel, Song Song, int Bitrate);
-    public record SongErrorArgs(Exception ex, IAudioClient Client, IMessageChannel MessageChannel, Song Song, int Bitrate) : SongArgs(Client, MessageChannel, Song, Bitrate);
+    public record SongErrorArgs(Exception Ex, IAudioClient Client, IMessageChannel MessageChannel, Song Song, int Bitrate) : SongArgs(Client, MessageChannel, Song, Bitrate);
 
     public interface ISongPlayer
     {
@@ -29,11 +29,9 @@ namespace MagicConchBot.Common.Interfaces
 
     public enum MusicType
     {
-	    YouTube = 0,
-	    SoundCloud = 1,
+        YouTube = 0,
+        SoundCloud = 1,
         Spotify = 2,
-	    Other
+        Other
     }
-
-    
 }
