@@ -1,7 +1,7 @@
 Bolinea Bot for Discord
 ===================
 
-Written in C# using the Discord.Net library v1.0. Simplified version on magic conch bot.
+Written in C# using the Discord.Net library v1.0. Simplified version of magic conch bot.
 
 **Features:**
 ------------------
