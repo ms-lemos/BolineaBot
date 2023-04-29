@@ -87,13 +87,11 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<TargetPath>ffplay.exe</TargetPath>
 		</ContentWithTargetPath>
-		<None Include="Dependencies\x64\ffplay.exe" />
 		
 		<ContentWithTargetPath Include="Dependencies\x64\ffprobe.exe">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<TargetPath>ffprobe.exe</TargetPath>
 		</ContentWithTargetPath>
-		<None Include="Dependencies\x64\ffprobe.exe" />
 
 		<ContentWithTargetPath Include="Dependencies\x64\opusinfo.exe">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
