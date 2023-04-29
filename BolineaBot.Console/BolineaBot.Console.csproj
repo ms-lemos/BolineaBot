@@ -52,10 +52,10 @@
 		<PackageReference Include="Discord.Net.Rest" Version="3.10.0" />
 		<PackageReference Include="Discord.Net.Webhook" Version="3.10.0" />
 		<PackageReference Include="Discord.Net.WebSocket" Version="3.10.0" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0-preview.2.23128.3" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
 		<PackageReference Include="NLog" Version="5.1.3" />
 		<PackageReference Include="SpotifyAPI.Web" Version="7.0.0" />
-		<PackageReference Include="YoutubeExplode" Version="6.2.12" />
+		<PackageReference Include="YoutubeExplode" Version="6.2.13" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -82,16 +82,6 @@
 			<TargetPath>ffmpeg.exe</TargetPath>
 		</ContentWithTargetPath>
 		<None Include="Dependencies\x64\ffmpeg.exe" />
-		
-		<ContentWithTargetPath Include="Dependencies\x64\ffplay.exe">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<TargetPath>ffplay.exe</TargetPath>
-		</ContentWithTargetPath>
-		
-		<ContentWithTargetPath Include="Dependencies\x64\ffprobe.exe">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<TargetPath>ffprobe.exe</TargetPath>
-		</ContentWithTargetPath>
 
 		<ContentWithTargetPath Include="Dependencies\x64\opusinfo.exe">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
