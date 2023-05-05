@@ -177,6 +177,7 @@ namespace MagicConchBot.Services.Music
         {
             var seek = song.Time.StartTime.HasValue ? $"-ss {song.Time.StartTime.Value}" : string.Empty;
 
+            //var arguments = $"-user_agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36 Edg/112.0.1722.68\" -referer \"{song.OriginalUrl}\" -hide_banner -loglevel warning -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.DefaultStreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:";
             var arguments = $"-hide_banner -loglevel warning -re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -err_detect ignore_err -i \"{song.DefaultStreamUri}\" {seek} -ac 2 -f s16le -vn -ar 48000 pipe:";
 
             Log.Debug(arguments);
