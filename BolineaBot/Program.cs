@@ -23,7 +23,7 @@ namespace MagicConchBot
         private static DiscordSocketClient _client;
 
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
-
+         
         public static void Main(string[] args)
         {
             Logging.ConfigureLogs();
@@ -33,7 +33,7 @@ namespace MagicConchBot
             try
             {
                 _cts = new CancellationTokenSource();
-                Task.Factory.StartNew(async () => await MainAsync(args, _cts.Token), _cts.Token).Wait();
+                var mainTask =  MainAsync(args, _cts.Token);
 
                 while (!_cts.Token.IsCancellationRequested)
                 {
