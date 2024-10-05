@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
 using Discord.Interactions;
+using Discord.Rest;
 using Discord.WebSocket;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Handlers;
@@ -23,7 +24,7 @@ namespace MagicConchBot
         private static DiscordSocketClient _client;
 
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
-         
+
         public static void Main(string[] args)
         {
             Logging.ConfigureLogs();
@@ -33,9 +34,9 @@ namespace MagicConchBot
             try
             {
                 _cts = new CancellationTokenSource();
-                var mainTask =  MainAsync(args, _cts.Token);
+                var mainTask = MainAsync(args, _cts.Token);
 
-                while (!_cts.Token.IsCancellationRequested)
+                while (!_cts.Token.IsCancellationRequested && !mainTask.IsFaulted)
                 {
                     if (!Console.IsInputRedirected && Console.KeyAvailable)
                     {
@@ -57,12 +58,20 @@ namespace MagicConchBot
 
                     Thread.Sleep(100);
                 }
+
+                if (mainTask.IsFaulted)
+                {
+                    Log.Error(mainTask.Exception, "Error on main task");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error initializing");
             }
             finally
             {
                 Log.Info("Bot sucessfully exited.");
-                Console.WriteLine("Press enter to continue . . .");
-                Console.ReadLine();
             }
         }
 
@@ -117,8 +126,15 @@ namespace MagicConchBot
                 LogLevel = LogSeverity.Info,
             };
 
+            var restConfig = new DiscordRestConfig
+            {
+                LogLevel = LogSeverity.Info,
+            };
+
             return new ServiceCollection()
+                .AddSingleton(restConfig)
                 .AddSingleton(config)
+                .AddSingleton<DiscordRestClient>()
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton<InteractionService>()
                 .AddSingleton<HttpClient>()
