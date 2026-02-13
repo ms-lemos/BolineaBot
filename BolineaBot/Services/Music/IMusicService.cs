@@ -32,6 +32,8 @@ namespace MagicConchBot.Common.Interfaces
 
         void QueueSong(Song song);
 
+        Task ResumeAfterReconnectAsync();
+
         Task<Song?> RemoveSong(int songNumber);
 
         void ClearQueue();

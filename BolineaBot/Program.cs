@@ -124,6 +124,10 @@ namespace MagicConchBot
             var config = new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Info,
+                GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
+                AlwaysDownloadUsers = false,
+                MessageCacheSize = 50,
+                DefaultRetryMode = RetryMode.AlwaysRetry,
             };
 
             var restConfig = new DiscordRestConfig
@@ -136,7 +140,7 @@ namespace MagicConchBot
                 .AddSingleton(config)
                 .AddSingleton<DiscordRestClient>()
                 .AddSingleton<DiscordSocketClient>()
-                .AddSingleton<InteractionService>()
+                .AddSingleton(sp => new InteractionService(sp.GetRequiredService<DiscordSocketClient>()))
                 .AddSingleton<HttpClient>()
                 .AddSingleton<CommandHandler>()
                 .AddSingleton<CommandService>()

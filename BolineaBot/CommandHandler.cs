@@ -2,8 +2,11 @@
 using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Discord.Net;
 using MagicConchBot.Common.Interfaces;
 using MagicConchBot.Modules;
+using MagicConchBot.Resources;
+using NLog;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -18,6 +21,11 @@ namespace MagicConchBot.Handlers
         private readonly InteractionService _interactionService;
         private readonly IServiceProvider _services;
         private readonly IMusicService _musicService;
+        private static readonly Logger Log = LogManager.GetCurrentClassLogger();
+        private bool _reconnecting;
+        private int _reconnectAttempts;
+        private bool _commandsRegistered;
+        private bool _resumePending;
 
         public CommandHandler(InteractionService interactionService, DiscordSocketClient client, CommandService commands, IServiceProvider services, IMusicService musicService)
         {
@@ -37,13 +45,76 @@ namespace MagicConchBot.Handlers
             _client.MessageReceived += HandleCommandAsync;
             _client.JoinedGuild += HandleJoinedGuildAsync;
             _client.Ready += ClientReady;
+            _client.Disconnected += HandleDisconnectedAsync;
         }
 
         private async Task ClientReady()
         {
+            if (_commandsRegistered)
+            {
+                return;
+            }
 
-            await _interactionService.RegisterCommandsGloballyAsync();
+            try
+            {
+                await _interactionService.RegisterCommandsGloballyAsync();
+                _commandsRegistered = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, "Failed to register global commands on Ready.");
+            }
 
+            if (_resumePending)
+            {
+                _resumePending = false;
+                await _musicService.ResumeAfterReconnectAsync();
+            }
+        }
+
+        private async Task HandleDisconnectedAsync(Exception exception)
+        {
+            if (_reconnecting)
+            {
+                return;
+            }
+
+            if (exception is WebSocketClosedException socketClosed && (socketClosed.CloseCode == 4006 || socketClosed.CloseCode == 4009))
+            {
+                Log.Warn($"Gateway session invalid (code {socketClosed.CloseCode}). Restarting Discord client.");
+            }
+            else
+            {
+                Log.Warn(exception, "Gateway disconnected; attempting restart.");
+            }
+
+            _reconnecting = true;
+
+            try
+            {
+                var delay = Math.Min(30000, (int)Math.Pow(2, _reconnectAttempts) * 2000);
+                _reconnectAttempts = Math.Min(_reconnectAttempts + 1, 4);
+                await Task.Delay(delay);
+
+                await _client.StopAsync();
+
+                if (_client.LoginState != LoginState.LoggedIn)
+                {
+                    await _client.LoginAsync(TokenType.Bot, Configuration.Token);
+                }
+
+                await _client.StartAsync();
+                _reconnectAttempts = 0;
+                _resumePending = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to restart Discord client after disconnect.");
+            }
+            finally
+            {
+                _reconnecting = false;
+            }
         }
 
         public async Task InstallAsync()

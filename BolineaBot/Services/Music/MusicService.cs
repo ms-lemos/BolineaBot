@@ -25,6 +25,9 @@ namespace MagicConchBot.Services.Music
         private CancellationTokenSource _tokenSource;
 
         private IUserMessage _currentPlayingMessage;
+        private IVoiceChannel _voiceChannel;
+        private IAudioClient _audioClient;
+        private IMessageChannel _lastMessageChannel;
 
         public MusicService(IEnumerable<ISongInfoService> songResolvers, ISongPlayer songPlayer)
         {
@@ -71,21 +74,23 @@ namespace MagicConchBot.Services.Music
             if (CurrentSong == null) return;
 
             IVoiceChannel audioChannel = AudioHelper.GetAudioChannel(context);
-            IAudioClient audioClient = await AudioHelper.JoinChannelAsync(audioChannel);
+            _voiceChannel = audioChannel;
+            _audioClient = await EnsureVoiceClientAsync(audioChannel);
 
-            if (audioClient == null)
+            if (_audioClient == null)
             {
                 await context.Channel.SendMessageAsync("Failed to join voice channel.");
                 return;
             }
 
-            await Play(audioClient, context.Channel, CurrentSong.Value, audioChannel.Bitrate);
+            await Play(_audioClient, context.Channel, CurrentSong.Value, audioChannel.Bitrate);
         }
 
         public async Task Stop()
         {
             await DeleteCurrentPlayingMessage();
             SongList.Clear();
+            _songIndex = 0;
             await _songPlayer.Stop();
         }
 
@@ -119,12 +124,18 @@ namespace MagicConchBot.Services.Music
             var song = SongList[songNumber];
             SongList.Remove(song);
 
+            if (SongList.Count == 0)
+            {
+                _songIndex = 0;
+            }
+
             return song;
         }
 
         public void ClearQueue()
         {
             SongList.Clear();
+            _songIndex = 0;
         }
 
         public void ShuffleQueue()
@@ -141,12 +152,23 @@ namespace MagicConchBot.Services.Music
 
             try
             {
+                if ((audioClient == null || audioClient.ConnectionState != ConnectionState.Connected) && _voiceChannel != null)
+                {
+                    audioClient = await EnsureVoiceClientAsync(_voiceChannel);
+                    if (audioClient == null)
+                    {
+                        Log.Warn("Unable to obtain a connected audio client. Skipping song.");
+                        return;
+                    }
+                }
+
                 var resolvedSong = await ResolveSong(song);
                 SongList[_songIndex] = resolvedSong;
 
                 _tokenSource.Token.ThrowIfCancellationRequested();
 
                 Log.Info($"Playing song {resolvedSong.Name} at {channel.Name}");
+                _lastMessageChannel = channel;
                 _songPlayer.PlaySong(audioClient, channel, resolvedSong, bitrate);
                 await StatusUpdater(channel, resolvedSong).ConfigureAwait(false);
             }
@@ -177,12 +199,50 @@ namespace MagicConchBot.Services.Music
 
             if (HasNextSong)
             {
-                await Play(e.Client, e.MessageChannel, CurrentSong.Value, e.Bitrate);
+                var client = _audioClient ?? e.Client;
+                if ((client == null || client.ConnectionState != ConnectionState.Connected) && _voiceChannel != null)
+                {
+                    client = await EnsureVoiceClientAsync(_voiceChannel);
+                }
+
+                if (client == null)
+                {
+                    Log.Warn("No connected audio client available; stopping playback.");
+                    await AudioHelper.LeaveChannelAsync(e.Client);
+                    return;
+                }
+
+                await Play(client, e.MessageChannel, CurrentSong.Value, e.Bitrate);
             }
             else
             {
                 await AudioHelper.LeaveChannelAsync(e.Client);
             }
+        }
+
+        private async Task<IAudioClient> EnsureVoiceClientAsync(IVoiceChannel channel)
+        {
+            if (channel == null)
+            {
+                return null;
+            }
+
+            if (_audioClient != null && _audioClient.ConnectionState == ConnectionState.Connected)
+            {
+                return _audioClient;
+            }
+
+            try
+            {
+                _audioClient = await AudioHelper.JoinChannelAsync(channel);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to (re)connect to voice channel.");
+                _audioClient = null;
+            }
+
+            return _audioClient;
         }
 
         private void SkipSong()
@@ -196,6 +256,28 @@ namespace MagicConchBot.Services.Music
             {
                 _songIndex = (_songIndex + 1) % SongList.Count;
             }
+        }
+
+        public async Task ResumeAfterReconnectAsync()
+        {
+            if (CurrentSong == null || _voiceChannel == null || _lastMessageChannel == null)
+            {
+                return;
+            }
+
+            if (IsPlaying)
+            {
+                return;
+            }
+
+            var client = await EnsureVoiceClientAsync(_voiceChannel);
+            if (client == null)
+            {
+                Log.Warn("Unable to resume playback: no connected audio client.");
+                return;
+            }
+
+            await Play(client, _lastMessageChannel, CurrentSong.Value, _voiceChannel.Bitrate);
         }
 
         private async Task StatusUpdater(IMessageChannel channel, Song song)

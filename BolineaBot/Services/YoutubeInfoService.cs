@@ -3,6 +3,7 @@ using MagicConchBot.Common.Types;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -87,13 +88,67 @@ namespace MagicConchBot.Services
                 var streams = manifest.GetAudioOnlyStreams().OrderByDescending(s => s.Bitrate);
                 var defaultStreamInfo = streams.FirstOrDefault();
 
-                return song with { DefaultStreamUri = defaultStreamInfo.Url };
+                if (defaultStreamInfo != null && !string.IsNullOrWhiteSpace(defaultStreamInfo.Url))
+                {
+                    return song with { DefaultStreamUri = defaultStreamInfo.Url };
+                }
+
+                Log.Warn($"No audio streams found via YoutubeExplode for {song.Identifier}, falling back to yt-dlp/youtube-dl.");
             }
             catch (Exception ex)
             {
                 Log.Error($"Failed to fetch youtube info: {ex.Message}");
-                return song;
             }
+
+            var fallbackUrl = await GetUrlFromYoutubeDlAsync(song.Identifier);
+
+            if (!string.IsNullOrWhiteSpace(fallbackUrl))
+            {
+                return song with { DefaultStreamUri = fallbackUrl };
+            }
+
+            Log.Warn($"Failed to resolve stream URL for {song.Identifier} via all resolvers.");
+            return song;
+        }
+
+        private static async Task<string> GetUrlFromYoutubeDlAsync(string videoId)
+        {
+            var binaries = new[] { "yt-dlp", "youtube-dl" };
+            foreach (var binary in binaries)
+            {
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = binary,
+                        Arguments = $"-g -f bestaudio --audio-quality 0 https://www.youtube.com/watch?v={videoId}",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+
+                    using var process = Process.Start(startInfo);
+                    if (process == null)
+                    {
+                        continue;
+                    }
+
+                    var line = await process.StandardOutput.ReadLineAsync();
+                    await process.WaitForExitAsync();
+
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        return line.Trim();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(ex, $"Fallback resolver {binary} failed for video {videoId}");
+                }
+            }
+
+            return null;
         }
     }
 }

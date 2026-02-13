@@ -92,13 +92,14 @@ namespace MagicConchBot.Services.Music
 
         private async Task PlaySong(IMessageChannel channel)
         {
+            if (audioClient == null || audioClient.ConnectionState != ConnectionState.Connected)
+            {
+                Log.Warn("Audio client not connected; skipping playback.");
+                return;
+            }
+
             using var process = StartFfmpeg(currentSong);
             using var inStream = process.StandardOutput.BaseStream;
-
-            if (audioClient.ConnectionState != ConnectionState.Connected)
-            {
-                throw new Exception("panic disconnected"); // todo check this
-            }
 
 
             tokenSource.Token.Register(() =>

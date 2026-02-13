@@ -20,7 +20,7 @@ namespace MagicConchBot.Common.Types
 
     public readonly record struct Song(string Name, SongTime Time, string ThumbnailUrl = "", string OriginalUrl = "", string Identifier = "", MusicType MusicType = MusicType.Other, string DefaultStreamUri = null)
     {
-        public bool IsResolved => DefaultStreamUri != null;
+        public bool IsResolved => !string.IsNullOrWhiteSpace(DefaultStreamUri);
         public Song(string url) : this(url, new SongTime(), OriginalUrl: url, DefaultStreamUri: url) { }
     }
 

@@ -1,4 +1,5 @@
-﻿using Discord.Commands;
+﻿using Discord;
+using Discord.Commands;
 using Discord.Interactions;
 using MagicConchBot.Attributes;
 using MagicConchBot.Common.Enums;
@@ -55,6 +56,8 @@ namespace MagicConchBot.Modules
             string queryOrUrl,
             TimeSpan? startTime = null)
         {
+            await DeferAsync();
+
             await Enqueue(queryOrUrl, startTime);
 
             // if not playing, start playing and then the player service
@@ -82,8 +85,9 @@ namespace MagicConchBot.Modules
         [SlashCommand("skip", "Skips the current song if one is playing.")]
         public async Task SkipAsync()
         {
+            await DeferAsync();
             var skipped = await Context.MusicService.Skip(Context);
-            await RespondAsync(skipped ? "Skipped current song." : "No song available to skip");
+            await Respond(skipped ? "Skipped current song." : "No song available to skip");
         }
 
         [SlashCommand("shuffle", "shuffles")]
@@ -171,7 +175,7 @@ namespace MagicConchBot.Modules
             // url invalid
             if (string.IsNullOrEmpty(url))
             {
-                await RespondAsync($"Could not find any videos for: {queryOrUrl}");
+                await Respond($"Could not find any videos for: {queryOrUrl}");
                 return;
             }
 
@@ -179,12 +183,12 @@ namespace MagicConchBot.Modules
             var playlistId = youtubeMatch.Groups["PlaylistId"].Value;
             if (playlistId != "")
             {
-                if (!silent) await ReplyAsync("Queueing songs from playlist. This may take a while, please wait.");
+                if (!silent) await Respond("Queueing songs from playlist. This may take a while, please wait.");
                 var songs = await _googleApiInfoService.GetSongsByPlaylistAsync(playlistId);
 
                 songs.ForEach(Context.MusicService.QueueSong);
 
-                if (!silent) await ReplyAsync($"Queued {songs.Count} songs from playlist.");
+                if (!silent) await Respond($"Queued {songs.Count} songs from playlist.");
             }
             else
             {
@@ -197,13 +201,23 @@ namespace MagicConchBot.Modules
 
                 try
                 {
-                    await RespondAsync(embed: song.GetEmbed());
+                    await Respond(embed: song.GetEmbed());
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex);
                 }
             }
+        }
+
+        private Task Respond(string message = null, Embed embed = null, bool ephemeral = false)
+        {
+            if (Context.Interaction.HasResponded)
+            {
+                return FollowupAsync(message, embed: embed, ephemeral: ephemeral);
+            }
+
+            return RespondAsync(message, embed: embed, ephemeral: ephemeral);
         }
     }
 }
