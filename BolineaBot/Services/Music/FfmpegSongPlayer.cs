@@ -124,11 +124,11 @@ namespace MagicConchBot.Services.Music
 
             FrameSize = 4096;
             using AudioOutStream outStream = audioClient.CreatePCMStream(AudioApplication.Music, Bitrate);
-            _currentPlaying = StreamAudio(currentSong, inStream, outStream);
+            _currentPlaying = StreamAudio(currentSong, inStream, outStream, process);
             await _currentPlaying;
         }
 
-        private async Task StreamAudio(Song song, Stream inStream, AudioOutStream outStream)
+        private async Task StreamAudio(Song song, Stream inStream, AudioOutStream outStream, Process process)
         {
             var buffer = new byte[FrameSize];
             var retryCount = 0;
@@ -142,24 +142,30 @@ namespace MagicConchBot.Services.Music
 
                 if (byteCount == 0)
                 {
-                    if (song.Time.Length != TimeSpan.Zero && song.Time.Length - song.Time.CurrentTime.GetValueOrDefault() <= TimeSpan.FromMilliseconds(1000))
+                    if (process.HasExited)
                     {
-                        Log.Debug("Read 0 bytes but song is finished.");
+                        Log.Debug("FFmpeg exited; ending stream.");
+                        break;
+                    }
+
+                    if (song.Time.Length != TimeSpan.Zero && song.Time.Length - song.Time.CurrentTime.GetValueOrDefault() <= TimeSpan.FromMilliseconds(500))
+                    {
+                        Log.Debug("Read 0 bytes and song duration reached; finishing.");
                         break;
                     }
 
                     await Task.Delay(100, tokenSource.Token).ConfigureAwait(false);
 
-                    if (++retryCount == MaxRetryCount)
+                    if (++retryCount >= MaxRetryCount)
                     {
                         Log.Warn($"Failed to read from ffmpeg. Retries: {retryCount}");
                         break;
                     }
+
+                    continue;
                 }
-                else
-                {
-                    retryCount = 0;
-                }
+
+                retryCount = 0;
 
 
                 if (outStream.CanWrite)

@@ -124,7 +124,8 @@ namespace MagicConchBot
             var config = new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Info,
-                GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
+                // Request only required intents to avoid 4014 invalid-intent disconnects
+                GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates,
                 AlwaysDownloadUsers = false,
                 MessageCacheSize = 50,
                 DefaultRetryMode = RetryMode.AlwaysRetry,

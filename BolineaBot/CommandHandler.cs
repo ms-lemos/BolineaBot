@@ -79,9 +79,16 @@ namespace MagicConchBot.Handlers
                 return;
             }
 
-            if (exception is WebSocketClosedException socketClosed && (socketClosed.CloseCode == 4006 || socketClosed.CloseCode == 4009))
+            if (exception is WebSocketClosedException socketClosed && socketClosed.CloseCode == 4014)
             {
-                Log.Warn($"Gateway session invalid (code {socketClosed.CloseCode}). Restarting Discord client.");
+                Log.Fatal("Received 4014 (invalid intents). Exiting so the container can restart after intent configuration is fixed.");
+                await _client.StopAsync();
+                Environment.Exit(1);
+            }
+
+            if (exception is WebSocketClosedException socketClosedInvalid && (socketClosedInvalid.CloseCode == 4006 || socketClosedInvalid.CloseCode == 4009))
+            {
+                Log.Warn($"Gateway session invalid (code {socketClosedInvalid.CloseCode}). Restarting Discord client.");
             }
             else
             {
