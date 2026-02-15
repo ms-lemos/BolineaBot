@@ -104,6 +104,15 @@ namespace MagicConchBot.Handlers
                     _reconnectAttempts = Math.Min(_reconnectAttempts + 1, 4);
                     await Task.Delay(delay);
 
+                    var state = _client.ConnectionState;
+
+                    if (state == ConnectionState.Connected || state == ConnectionState.Connecting)
+                    {
+                        Log.Info("Client already connected; skipping restart.");
+                        _resumePending = true;
+                        return;
+                    }
+
                     await _client.StopAsync();
 
                     if (_client.LoginState != LoginState.LoggedIn)
