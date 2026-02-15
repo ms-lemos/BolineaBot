@@ -9,6 +9,7 @@ using MagicConchBot.Resources;
 using NLog;
 using System;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MagicConchBot.Handlers
@@ -22,7 +23,7 @@ namespace MagicConchBot.Handlers
         private readonly IServiceProvider _services;
         private readonly IMusicService _musicService;
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
-        private bool _reconnecting;
+        private int _reconnecting;
         private int _reconnectAttempts;
         private bool _commandsRegistered;
         private bool _resumePending;
@@ -72,56 +73,59 @@ namespace MagicConchBot.Handlers
             }
         }
 
-        private async Task HandleDisconnectedAsync(Exception exception)
+        private Task HandleDisconnectedAsync(Exception exception)
         {
-            if (_reconnecting)
+            if (Interlocked.Exchange(ref _reconnecting, 1) == 1)
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            if (exception is WebSocketClosedException socketClosed && socketClosed.CloseCode == 4014)
+            _ = Task.Run(async () =>
             {
-                Log.Fatal("Received 4014 (invalid intents). Exiting so the container can restart after intent configuration is fixed.");
-                await _client.StopAsync();
-                Environment.Exit(1);
-            }
-
-            if (exception is WebSocketClosedException socketClosedInvalid && (socketClosedInvalid.CloseCode == 4006 || socketClosedInvalid.CloseCode == 4009))
-            {
-                Log.Warn($"Gateway session invalid (code {socketClosedInvalid.CloseCode}). Restarting Discord client.");
-            }
-            else
-            {
-                Log.Warn(exception, "Gateway disconnected; attempting restart.");
-            }
-
-            _reconnecting = true;
-
-            try
-            {
-                var delay = Math.Min(30000, (int)Math.Pow(2, _reconnectAttempts) * 2000);
-                _reconnectAttempts = Math.Min(_reconnectAttempts + 1, 4);
-                await Task.Delay(delay);
-
-                await _client.StopAsync();
-
-                if (_client.LoginState != LoginState.LoggedIn)
+                try
                 {
-                    await _client.LoginAsync(TokenType.Bot, Configuration.Token);
-                }
+                    if (exception is WebSocketClosedException socketClosed && socketClosed.CloseCode == 4014)
+                    {
+                        Log.Fatal("Received 4014 (invalid intents). Exiting so the container can restart after intent configuration is fixed.");
+                        await _client.StopAsync();
+                        Environment.Exit(1);
+                    }
 
-                await _client.StartAsync();
-                _reconnectAttempts = 0;
-                _resumePending = true;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to restart Discord client after disconnect.");
-            }
-            finally
-            {
-                _reconnecting = false;
-            }
+                    if (exception is WebSocketClosedException socketClosedInvalid && (socketClosedInvalid.CloseCode == 4006 || socketClosedInvalid.CloseCode == 4009))
+                    {
+                        Log.Warn($"Gateway session invalid (code {socketClosedInvalid.CloseCode}). Restarting Discord client.");
+                    }
+                    else
+                    {
+                        Log.Warn(exception, "Gateway disconnected; attempting restart.");
+                    }
+
+                    var delay = Math.Min(30000, (int)Math.Pow(2, _reconnectAttempts) * 2000);
+                    _reconnectAttempts = Math.Min(_reconnectAttempts + 1, 4);
+                    await Task.Delay(delay);
+
+                    await _client.StopAsync();
+
+                    if (_client.LoginState != LoginState.LoggedIn)
+                    {
+                        await _client.LoginAsync(TokenType.Bot, Configuration.Token);
+                    }
+
+                    await _client.StartAsync();
+                    _reconnectAttempts = 0;
+                    _resumePending = true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to restart Discord client after disconnect.");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _reconnecting, 0);
+                }
+            });
+
+            return Task.CompletedTask;
         }
 
         public async Task InstallAsync()
