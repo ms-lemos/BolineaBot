@@ -92,6 +92,7 @@ namespace MagicConchBot.Services.Music
             SongList.Clear();
             _songIndex = 0;
             await _songPlayer.Stop();
+            await LeaveVoiceIfIdleAsync();
         }
 
         public async Task Pause()
@@ -136,6 +137,7 @@ namespace MagicConchBot.Services.Music
         {
             SongList.Clear();
             _songIndex = 0;
+            _ = LeaveVoiceIfIdleAsync();
         }
 
         public void ShuffleQueue()
@@ -217,6 +219,18 @@ namespace MagicConchBot.Services.Music
             else
             {
                 await AudioHelper.LeaveChannelAsync(e.Client);
+                _audioClient = null;
+                _voiceChannel = null;
+            }
+        }
+
+        private async Task LeaveVoiceIfIdleAsync()
+        {
+            if (SongList.Count == 0 && _audioClient != null)
+            {
+                await AudioHelper.LeaveChannelAsync(_audioClient);
+                _audioClient = null;
+                _voiceChannel = null;
             }
         }
 
