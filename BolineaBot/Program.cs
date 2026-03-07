@@ -129,6 +129,7 @@ namespace MagicConchBot
                 AlwaysDownloadUsers = false,
                 MessageCacheSize = 50,
                 DefaultRetryMode = RetryMode.AlwaysRetry,
+                EnableVoiceDaveEncryption = true,
             };
 
             var restConfig = new DiscordRestConfig
