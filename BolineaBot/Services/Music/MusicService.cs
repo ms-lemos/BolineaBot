@@ -28,6 +28,7 @@ namespace MagicConchBot.Services.Music
         private IVoiceChannel _voiceChannel;
         private IAudioClient _audioClient;
         private IMessageChannel _lastMessageChannel;
+        private int _consecutiveUnresolved;
 
         public MusicService(IEnumerable<ISongInfoService> songResolvers, ISongPlayer songPlayer)
         {
@@ -91,6 +92,7 @@ namespace MagicConchBot.Services.Music
             await DeleteCurrentPlayingMessage();
             SongList.Clear();
             _songIndex = 0;
+            _consecutiveUnresolved = 0;
             await _songPlayer.Stop();
             await LeaveVoiceIfIdleAsync();
         }
@@ -112,6 +114,11 @@ namespace MagicConchBot.Services.Music
         public void QueueSong(Song song)
         {
             SongList.Add(song);
+        }
+
+        public void QueueSongNext(Song song)
+        {
+            SongList.Insert(_songIndex + 1, song);
         }
 
         public async Task<Song?> RemoveSong(int songNumber)
@@ -137,6 +144,7 @@ namespace MagicConchBot.Services.Music
         {
             SongList.Clear();
             _songIndex = 0;
+            _consecutiveUnresolved = 0;
             _ = LeaveVoiceIfIdleAsync();
         }
 
@@ -166,6 +174,24 @@ namespace MagicConchBot.Services.Music
 
                 var resolvedSong = await ResolveSong(song);
                 SongList[_songIndex] = resolvedSong;
+
+                if (!resolvedSong.IsResolved)
+                {
+                    _consecutiveUnresolved++;
+                    if (_consecutiveUnresolved >= SongList.Count)
+                    {
+                        Log.Warn("All songs in the queue failed to resolve. Stopping playback.");
+                        await channel.SendMessageAsync("All songs in the queue failed to resolve. Stopping playback.");
+                        SongList.Clear();
+                        _songIndex = 0;
+                        await LeaveVoiceIfIdleAsync();
+                        return;
+                    }
+                }
+                else
+                {
+                    _consecutiveUnresolved = 0;
+                }
 
                 _tokenSource.Token.ThrowIfCancellationRequested();
 

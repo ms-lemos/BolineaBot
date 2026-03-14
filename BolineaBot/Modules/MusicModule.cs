@@ -68,6 +68,28 @@ namespace MagicConchBot.Modules
             }
         }
 
+        [SlashCommand(
+            "playnow",
+            "Plays a song next, skipping the rest of the queue",
+            runMode: RunMode.Async)]
+        public async Task PlayNow(
+            string queryOrUrl)
+        {
+            await DeferAsync();
+
+            await EnqueueNext(queryOrUrl);
+
+            if (!Context.MusicService.IsPlaying)
+            {
+                Log.Info("No song currently playing, playing.");
+                await Context.MusicService.Play(Context);
+            }
+            else
+            {
+                var skipped = await Context.MusicService.Skip(Context);
+            }
+        }
+
         [SlashCommand("stop", "Stops the bot if it is playing music and disconnects it from the voice channel.")]
         public async Task StopAsync()
         {
@@ -97,24 +119,35 @@ namespace MagicConchBot.Modules
             await RespondAsync("Shuffled");
         }
 
+        [SlashCommand("somzera", "somzera da madrugada")]
+        public async Task SomzeraDaMadrugadaAsync(string queryOrUrl = null)
+        {
+            if (queryOrUrl == null)
+            {
+                var playlists = new[]
+                {                 
+                    "https://www.youtube.com/playlist?list=PL89yfO4AmqBT2qD1LbbPZaM9vdB_DGr1D&jct=-4b6tBgwyg0xokFFBPlxfQ",             
+                };
+
+                await PlayAndShuffle(playlists);
+            }
+            else
+            {
+                await PlayAndShuffle(queryOrUrl);
+            }
+        }
+
         [SlashCommand("dotinha", "dotinha da madrugada")]
         public async Task DotinhaDaMadrugadaAsync()
         {
-            await RespondAsync($"Vamo da-le");
-
-            await Enqueue("https://www.youtube.com/playlist?list=PL89yfO4AmqBTdOJ0tTurRq6Qqk9rqd4nY", silent: true);
-            await Enqueue("https://www.youtube.com/playlist?list=PL89yfO4AmqBT2-xAjlhyyjUT3691tt3pQ", silent: true);
-            await Enqueue("https://www.youtube.com/playlist?list=PL89yfO4AmqBSX-4jDUP7ck1KZIETj0NQ2", silent: true);
-
-            Context.MusicService.ShuffleQueue();
-
-            Context.MusicService.PlayMode = PlayMode.Playlist;
-
-            if (!Context.MusicService.IsPlaying)
+            var playlists = new[]
             {
-                Log.Info("No song currently playing, playing.");
-                await Context.MusicService.Play(Context);
-            }
+                "https://www.youtube.com/playlist?list=PL89yfO4AmqBTdOJ0tTurRq6Qqk9rqd4nY",
+                "https://www.youtube.com/playlist?list=PL89yfO4AmqBT2-xAjlhyyjUT3691tt3pQ",
+                "https://www.youtube.com/playlist?list=PL89yfO4AmqBSX-4jDUP7ck1KZIETj0NQ2"
+            };
+
+            await PlayAndShuffle(playlists);
         }
 
         [SlashCommand("volume", "Gets or changes the volume of the current playing song and future songs.")]
@@ -210,6 +243,47 @@ namespace MagicConchBot.Modules
             }
         }
 
+        private async Task EnqueueNext(string queryOrUrl, TimeSpan? startTime = null)
+        {
+            if (queryOrUrl == null)
+            {
+                await Resume();
+                return;
+            }
+
+            string url;
+
+            if (!SongHelper.UrlRegex.IsMatch(queryOrUrl))
+            {
+                url = await _googleApiInfoService.GetFirstVideoByKeywordsAsync(queryOrUrl);
+            }
+            else
+            {
+                url = queryOrUrl;
+            }
+
+            if (string.IsNullOrEmpty(url))
+            {
+                await Respond($"Could not find any videos for: {queryOrUrl}");
+                return;
+            }
+
+            Log.Info("Resolving song");
+            var song = await _songResolutionService.ResolveSong(url, startTime ?? TimeSpan.Zero);
+
+            Log.Debug("Queueing song next");
+            Context.MusicService.QueueSongNext(song);
+
+            try
+            {
+                await Respond(embed: song.GetEmbed());
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+            }
+        }
+
         private Task Respond(string message = null, Embed embed = null, bool ephemeral = false)
         {
             if (Context.Interaction.HasResponded)
@@ -218,6 +292,26 @@ namespace MagicConchBot.Modules
             }
 
             return RespondAsync(message, embed: embed, ephemeral: ephemeral);
+        }
+
+        private async Task PlayAndShuffle(params string[] playlists)
+        {
+            await RespondAsync($"Vamo da-le");
+
+            foreach (var playlist in playlists)
+            {
+                await Enqueue(playlist, silent: true);
+            }
+
+            Context.MusicService.ShuffleQueue();
+
+            Context.MusicService.PlayMode = PlayMode.Playlist;
+
+            if (!Context.MusicService.IsPlaying)
+            {
+                Log.Info("No song currently playing, playing.");
+                await Context.MusicService.Play(Context);
+            }
         }
     }
 }

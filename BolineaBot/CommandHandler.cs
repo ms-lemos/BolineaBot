@@ -58,12 +58,17 @@ namespace MagicConchBot.Handlers
 
             try
             {
-                await _interactionService.RegisterCommandsGloballyAsync();
+                // Register commands per guild for instant propagation
+                // (global registration can take up to 1 hour to update)
+                foreach (var guild in _client.Guilds)
+                {
+                    await _interactionService.RegisterCommandsToGuildAsync(guild.Id);
+                }
                 _commandsRegistered = true;
             }
             catch (Exception ex)
             {
-                Log.Warn(ex, "Failed to register global commands on Ready.");
+                Log.Warn(ex, "Failed to register commands on Ready.");
             }
 
             if (_resumePending)
