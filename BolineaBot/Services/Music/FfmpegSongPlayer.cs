@@ -177,7 +177,14 @@ namespace MagicConchBot.Services.Music
 
             }
 
-            await outStream.FlushAsync(tokenSource.Token);
+            try
+            {
+                await outStream.FlushAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"Flush failed: {ex.Message}");
+            }
         }
 
         private static Process StartFfmpeg(Song song)

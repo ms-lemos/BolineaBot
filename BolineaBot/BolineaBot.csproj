@@ -41,15 +41,15 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-	  <PackageReference Include="Discord.Net" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Commands" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Core" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Dave" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Interactions" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Rest" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.Webhook" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Discord.Net.WebSocket" Version="3.19.0-nightly.20260304.783" />
-	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+	  <PackageReference Include="Discord.Net" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Commands" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Core" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Dave" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Interactions" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Rest" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.Webhook" Version="3.19.1" />
+	  <PackageReference Include="Discord.Net.WebSocket" Version="3.19.1" />
+	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
 	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
 	  <PackageReference Include="NLog" Version="6.1.1" />
 	  <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
